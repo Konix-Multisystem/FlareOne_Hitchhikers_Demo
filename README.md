@@ -3,7 +3,7 @@ Flare One - Hitchhikers Demo (Demo used to promote future Konix Multisystem Hard
 
 ![Screenshot](./Screenshot.png)
 
-The sources in the Sources folder were originally compiled with the PDS system. However [Z80 Assembler](https://github.com/Konix-Multisystem/FlareOne_Assembler) can be compiled into the HITCH.FL1 image used for running on the Slipstream emulator.
+The sources in the Sources folder were originally compiled with the PDS system. However [Z80 Assembler](https://github.com/Konix-Multisystem/FlareOne_Assembler) can be used to assemble the source into the HITCH.FL1 image used for running on the Slipstream emulator.
 
 ```
 cd Sources
