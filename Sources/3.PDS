@@ -1,0 +1,353 @@
+
+
+
+;---------------------------------------------------------
+;The colour demo. Well as you can see, it doesn't do a lot
+
+color_demo	ld a,true
+	ld (can_switch),a		;can switch languages etc
+
+	ld hl,init_ball
+	ld de,ball_1
+	ld bc,10
+	ldir		;initialise the balls
+
+	xor a
+	ld (fade_col),a	;fade colour MULTI-SYSTEN and EXPERIENCE
+	ld a,1
+	ld (fade_dir),a	;direction of fade
+
+	ld hl,dr1
+	ld de,dr1+1
+	ld bc,30
+	ld (hl),0
+	ldir		;clear out RGB stuff
+	ld a,1
+	ld (count1),a
+	ld (count2),a	;set the counters
+
+	ld hl,2047
+	ld (color_cnt),hl
+
+
+;-------------------
+
+	clw
+	ld bc,12*256
+	hcursor
+
+	ld hl,font_1	;change to darker font for text
+	font
+
+	ld hl,b_color	;which colour demo text
+	ld a,(language)
+	and a
+	jr z,$1
+	ld hl,f_color
+	dec a
+	jr z,$1
+	ld hl,g_color
+$1	pstring
+
+
+;-------------------
+
+$2	ld bc,0
+	int_line	;stop snow from palette
+	halt
+
+	ld hl,fade_col
+	ld a,(hl)
+	inc hl
+	add a,(hl)
+	ld c,a	;make a copy
+	cp 16
+	jr c,$3
+	sub (hl)
+	ld c,a
+	xor a
+	sub (hl)
+	ld (hl),a	;change direction
+
+$3	dec hl
+	ld (hl),c	;set it
+	ld a,27	;palette number of MUTLI-SYSTEM
+	out (PALAW),a
+	ld a,c
+	add a,a
+	add a,a	;not sign extended because that's notsagood
+	out (PALVAL),a
+	out (PALVAL),a
+	out (PALVAL),a
+	sub 60
+	neg		;EXPERIENCE fades the opposite way
+	ld c,a
+	ld a,28	;palette number of EXPERIENCE
+	out (PALAW),a
+	ld a,c
+	out (PALVAL),a
+	xor a
+	out (PALVAL),a
+	out (PALVAL),a
+
+
+;-------------------
+
+	ld de,dr1	;colour fade jobby
+	ld hl,ball_1
+	call do_ball
+	ld de,dr1
+	ld hl,ball_1
+	call do_ball
+
+	ld de,dr2
+	ld hl,ball_2
+	call do_ball
+	ld de,dr2
+	ld hl,ball_2
+	call do_ball
+
+;-------------------
+
+	ld hl,logo1
+	ld a,9
+	ld bc,256*logo_y+logo_x
+	copy
+
+	ld hl,logo2
+	ld a,9
+	ld bc,256*(logo_y+40)+logo_x-15
+	copy
+
+	ld bc,flicker_free	;wait til out of window 1 before plots
+	int_line
+	permanent
+	draw_screen
+	call do_any		;mouse movement
+
+;-------------------
+
+	ld hl,(color_cnt)
+	dec hl
+	ld (color_cnt),hl
+	ld a,h
+	or l
+	jp nz,$2
+	jp fade_out		;clear screen using boxes
+
+
+;---------------------------------------------------------------------
+;Move the box/ball about in window 1. HL is a pointer to a ball struct
+;on entry:
+;
+;	BYTE  X pos
+;	BYTE  X dir
+;	BYTE  Y pos
+;	BYTE  Y dir
+;	BYTE  colour for filling with
+
+do_ball	ld a,(hl)
+	ld c,a	;for printing
+	inc hl
+	add a,(hl)
+	dec hl
+	cp bounce_minx
+	jr c,$1
+	cp bounce_maxx
+	jr nc,$1
+	ld (hl),a
+	ld c,a
+	jr $2
+
+$1	inc hl	;negate the Y direction
+	xor a
+	sub (hl)
+	ld (hl),a
+	dec hl
+
+;-------------------
+
+$2	inc hl
+	inc hl	;points to Y stuff now
+	ld a,(hl)
+	ld b,a	;for printing purposes
+	inc hl
+	add a,(hl)
+	dec hl
+	cp bounce_miny
+	jr c,$3
+	cp bounce_maxy
+	jr nc,$3
+	ld (hl),a
+	ld b,a
+	jr $4
+
+$3	inc hl
+	xor a
+	sub (hl)
+	ld (hl),a
+	dec hl
+
+;-------------------
+
+$4	inc hl
+	inc hl
+	ld a,(hl)	;clever SPECCY stuff this !
+	inc a
+	xor (hl)
+	and 31
+	xor (hl)
+	ld (hl),a
+
+	push de		;de=pointer to dR, dB, dG
+	ld de,box_ys*256+box_xs
+	fill
+
+;-------------------
+
+	pop de
+	ld a,(hl)
+	out (PALAW),a	;which one to change
+	ld l,e
+	ld h,d
+	inc hl
+	inc hl
+	inc hl	;to counter
+	dec (hl)
+	jr nz,$5
+
+	ld (hl),15	;reset the counter, and choose new colour INC
+	push hl
+	inc hl	;to RGB values
+	push de
+	xor a
+	ld (de),a
+	inc de
+	ld (de),a
+	inc de
+	ld (de),a
+	dec de
+	dec de	;zero dR, dB and dG
+
+$9	random
+	xor b
+	and 3
+	cp 3
+	jr z,$9
+
+	ld c,a
+	ld b,0
+	add hl,bc
+	ex de,hl
+	add hl,bc	;move to either R, G or B
+	call ch_pattern
+	pop de
+	pop hl
+
+;-------------------
+
+$5	inc hl
+	ld a,(de)
+	add a,(hl)
+	ld (hl),a	;RED value
+	inc hl
+	inc de
+	add a,a
+	add a,a
+	out (PALVAL),a
+	ld a,(de)
+	add a,(hl)
+	ld (hl),a
+	add a,a
+	add a,a
+	out (PALVAL),a	;GREEN value
+	inc hl
+	inc de
+	ld a,(de)
+	add a,(hl)
+	ld (hl),a
+	add a,a
+	add a,a
+	out (PALVAL),a	;BLUE value
+	ret
+
+
+;-------------------
+
+init_ball	defb bounce_minx,1	;initial ball values
+	defb bounce_miny,1,32
+	defb bounce_maxx-1,-1
+	defb bounce_maxy,-1,96
+
+
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+;Change direction of R, G or B slides
+
+ch_pattern	ld a,(de)	;points to R/G or B
+	cp 7
+	ld (hl),-1
+	ret nc
+	ld (hl),1
+	ret
+
+
+;------------------------------------------------------
+;Zero a palette entry. A is palette number to be zeroed
+
+zero_pal	out (PALAW),a
+	xor a
+	out (PALVAL),a
+	out (PALVAL),a
+	out (PALVAL),a
+	ret
+
+
+;-------------------------------------------------------
+;Fade a palette entry in. HL points to stored RGB values
+;C is a number. The lowest of C and (HL) is used as the
+;RGB value. A is the entry for fading in
+
+fade_in	out (PALAW),a	;writing to it
+	ld a,c
+	cp (hl)
+	jr z,$1
+	jr c,$1
+	ld a,(hl)
+$1	call send_sign	;RED
+	inc hl
+
+	ld a,c
+	cp (hl)
+	jr z,$2
+	jr c,$2
+	ld a,(hl)
+$2	call send_sign	;BLUE
+	inc hl
+
+	ld a,c
+	cp (hl)
+	jr z,$3
+	jr c,$3
+	ld a,(hl)
+$3	call send_sign	;GREEN
+	ret
+
+
+;---------------------------------------------------------------------
+;Sign extend (downwards) a number in the accumulator, and send it to
+;the palette board
+
+send_sign	push de
+	ld d,a	;sign extend (downwards !)
+	and 1
+	ld e,a
+	ld a,d
+	add a,a
+	or e
+	add a,a
+	or e
+	out (PALVAL),a	;write it out
+	pop de
+	ret	
+
+

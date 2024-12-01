@@ -1,0 +1,668 @@
+
+;---------------------------------------------------------------------
+;Only calls DO_IT_ALL every 3 calls
+
+do_any	ld hl,syncit
+	inc (hl)
+	ld a,(hl)
+	cp 3
+	ret c
+	ld (hl),0	;just drop thru to do_it_all
+
+;-------------------
+
+do_it_all	call shrink
+	call acceler8
+	call rd_joy
+	jp do_hand
+
+
+;---------------------------------------------------------------------
+
+ftable	defb b_flagx,b_flagy	;positions, data
+	defw flag_b
+	defb f_flagx,f_flagy
+	defw flag_f
+	defb g_flagx,g_flagy
+	defw flag_g
+
+
+;---------------------------------------------------------------------
+;Animate the correct flag. PLOT_FLAG is also called to plot the
+;initial definitions to the screen
+
+do_flag	ld a,(language)		;which flag ?
+	add a,a
+	add a,a
+	ld hl,ftable
+	ld e,a
+	ld d,0
+	add hl,de
+
+	ld c,(hl)
+	inc hl
+	ld b,(hl)	;pos out
+	inc hl
+	ld e,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,e	;data pointer
+
+	ld a,(f_frame)
+	inc a
+	ld (f_frame),a
+
+
+;-------------------
+
+plot_flag	ld (flag_blit+DSTAD0),bc	;dest
+	ld bc,flag_h*flag_w	;addition to each frame
+	and 3
+	jr z,$1
+$2	add hl,bc
+	dec a
+	jr nz,$2
+
+$1	ld (flag_blit+SRCAD0),hl	;source data
+	ld hl,flag_blit
+	blit_run cpmpage,031h	;copy
+	ret
+
+
+;---------------------------------------------------------------------
+;Shrink/expand a rotating image randomly
+
+shrink	ld a,(shrink_f)
+	and a
+	jr nz,$1
+
+	random
+	and 63
+	ret nz	;1/64 chance
+
+	ld a,true
+	ld (shrink_f),a
+	ld a,-24
+	ld (shrink_dir),a		;shrink it initially
+	ld a,shrink_num
+	ld (shrink_lp),a		;number of shrinks
+	ret
+
+;-------------------
+
+$1	ld a,(shrink_dir)
+	ld c,a
+	rla
+	sbc a,a
+	ld b,a	;sign extend it
+	ld hl,(enlarge)
+	add hl,bc
+	ld (enlarge),hl
+
+	ld hl,shrink_lp
+	dec (hl)
+	ret nz
+
+;-------------------
+
+	ld (hl),shrink_num
+	ld hl,shrink_dir
+	xor a
+	sub (hl)
+	ld (hl),a
+	ret p
+
+	xor a		;if gone -ve then trying to shrink again
+	ld (shrink_f),a
+	ret
+
+
+;---------------------------------------------------------------------
+;Accelerate in the X direction a rotating image randomly
+
+acceler8	ld a,(accel_f)
+	and a
+	jr nz,$1
+
+	random
+	and 63
+	ret nz	;1/64 chance
+
+	ld a,true
+	ld (accel_f),a
+	ld a,2
+	ld (accel_dir),a		;shrink it initially
+	ld a,accel_num
+	ld (accel_lp),a		;number of accels applied
+	ret
+
+;-------------------
+
+$1	ld a,(accel_dir)
+	ld hl,x_speed
+	add a,(hl)
+	ld (hl),a	;add accel factor to current speed
+
+	ld hl,accel_lp
+	dec (hl)
+	ret nz
+
+;-------------------
+
+	ld (hl),accel_num
+	ld hl,accel_dir
+	xor a
+	sub (hl)
+	ld (hl),a
+	ret m
+
+	xor a		;if gone +ve then trying to shrink again
+	ld (accel_f),a
+	ret
+
+
+;=====================================================================
+;Read the controller and set up various values
+
+CONTROLL_P	equ 0e0h
+VERTI	equ 5
+HORIZ	equ 6
+
+IP_PORT	equ 160
+BUTT_PED	equ 63	;all twiddly bits register FIRED
+
+rd_joy	in a,(IP_PORT)
+	and BUTT_PED
+	xor BUTT_PED	;active low, so complement 
+	ld (fired),a
+
+	ld a,VERTI
+	out (CONTROLL_P),a	;get vertical input now
+
+	ld a,(vertical)
+	ld (last_v),a
+	ld a,(horizontal)
+	ld (last_h),a		;do something useful whilst waiting
+
+	ld b,18
+	djnz $
+	ld hl,last_v
+	in a,(CONTROLL_P)
+	add a,(hl)		;average with last value !
+	rra
+	ld hl,vertical
+	add a,(hl)
+	rra
+	cp 22		;SPECIFIC to KMS 2
+	jr c,$1
+	cp 84
+	jr nc,$1
+	ld (hl),a
+
+;-------------------
+
+$1	ld a,HORIZ
+	out (CONTROLL_P),a	;get horizontal now
+
+	ld b,20
+	djnz $		;wait for a while
+	ld hl,last_h
+	in a,(CONTROLL_P)
+	add a,(hl)		;average with the last one
+	rra
+	ld hl,horizontal
+	add a,(hl)
+	rra
+	cp 66		;SPECIFIC to KMS 2
+	ret c
+	cp 174
+	ret nc
+	ld (hl),a
+	ret
+
+
+;=====================================================================
+;Performs A*E, and then divides by 256, to fix the hand movement !
+
+scale_it	ld h,a
+	ld l,0
+	ld d,0
+	ld b,8
+$1	add hl,hl
+	jr nc,$2
+	add hl,de
+$2	djnz $1
+	ld a,h
+	ret
+
+
+;=====================================================================
+;Get the hand background into the background buffer
+
+get_back	ld hl,(hot_x)
+	ld (store_hand+SRCAD0),hl
+	ld hl,store_hand
+	blit_run cpmpage,029h	;copy with source update
+	ret
+
+
+;=====================================================================
+;Restore the hand (mouse) background from the buffer
+
+rest_back	ld hl,(store_hand+SRCAD0)	;restore hand background
+	ld (get_hand+DSTAD0),hl
+	ld hl,get_hand
+	blit_run cpmpage,031h
+	ret
+
+
+;=====================================================================
+;Move the hand about, and act if fire button pressed
+
+do_hand	ld a,(hand_mode)
+	cp normal_h
+	jp nz,selected_n
+
+;-------------------
+
+	ld a,(horizontal)
+	sub 66
+	add a,a		;*2 to approx to 255
+	ld e,max_hx-min_hx	;region permitted in
+	call scale_it
+	add a,min_hx
+	ld (hot_x),a
+
+	ld a,(vertical)
+	sub 22
+	add a,a
+	add a,a		;*4 to approx to 255
+	ld e,max_hy-min_hy	;region allowed into
+	call scale_it
+	add a,min_hy
+	ld (hot_y),a	;both X and Y are proportional
+
+
+;-------------------
+
+$2	call show_hand
+	ld a,(fired)
+	and a
+	ret z
+	ld a,(can_switch)
+	and true
+	ret z		;can ONLY switch when NOT displaying labels
+
+	ld a,(hot_y)	;where is the hand ?
+	cp w2_ys	;window 4 or window 2 ?
+	jr nc,$3
+
+;-------------------
+
+	ld a,(hot_x)	;IN WINDOW 4
+	cp b_flagx
+	ret c
+	cp b_flagx+flag_w
+	ret nc
+
+	ld a,(hot_y)
+	cp b_flagy
+	ret c
+	cp g_flagy+flag_h
+	ret nc
+
+	ld c,0	;denotes flag in question
+	cp b_flagy+flag_h
+	jr c,$5
+	inc c
+	cp f_flagy+flag_h
+	jr c,$5
+	inc c
+
+$5	ld hl,language	;C=flag chosen
+	ld a,(hl)
+	cp c
+	ret z		;do nothing if the same
+	ld (hl),c	;set it
+
+	call init_lang
+	call change_txt
+
+;-------------------
+
+	ld a,(can_switch)		;clear the window ?
+	and re_display
+	ret z
+
+	halt
+	clw
+	ld bc,0
+	hcursor
+	ld hl,0
+	ld (last_coords),hl
+	xor a
+	ld (last_char),a 
+	ret
+
+
+;-------------------
+
+$3	cp arro_y	;IN WINDOW 2
+	ret c
+	cp arro_y+arro_h
+	ret nc
+
+	ld a,(hot_x)
+	cp arro1_x
+	ret c
+	cp arro1_x+arro_w
+	jr nc,$4
+
+;-------------------
+
+	ld hl,next_bit
+	dec (hl)
+	ld a,(hl)
+	cp num_actions
+	jr c,$6
+	ld (hl),num_actions-1	;cycle backwards with wrap
+
+$6	ld a,scroll_t
+	ld (hand_mode),a
+	ld a,w5_ysize/2
+	ld (w5_count),a		;scroll counts
+	jp rest_back		;MOUSE OFF temporarily
+
+
+;-------------------
+
+$4	cp arro2_x
+	ret c
+	cp arro2_x+arro_w
+	ret nc
+
+;-------------------
+
+	ld hl,next_bit
+	inc (hl)
+	ld a,(hl)
+	cp num_actions
+	jr c,$6
+	ld (hl),0
+	jr $6
+
+
+;=====================================================================
+;The other 2 modes that the hand exhibits. Scrolling window 5s text
+;and replacing that text with other text
+
+selected_n	cp scroll_t
+	jr nz,$1
+	call do_flag
+
+	ld hl,wind5_scrl		;scroll window 5
+	blit_run cpmpage,039h
+
+	ld hl,w5_count
+	dec (hl)
+	ret nz
+	ld a,print_t
+	ld (hand_mode),a
+	ret
+
+
+;-------------------
+
+$1	call init_lang	;language might have changed meanwhile
+	call show_next
+	call show_this
+	ld a,normal_h
+	ld (hand_mode),a
+	call do_flag
+	jp get_back
+
+
+;---------------------------------------------------------------------
+;Change the text when we change language mid shape
+
+change_txt	ld a,(which_bit)
+	ld c,a
+	add a,a
+	add a,a
+	add a,a
+	add a,c
+	ld c,a
+	ld b,0	;*9 'cos of format
+	ld hl,hi_level
+	add hl,bc
+	inc hl
+	inc hl
+	inc hl
+	ld a,(language)	;choose text depending upon the language
+	add a,a
+	ld c,a
+	ld b,0
+	add hl,bc	;hl now points to correct
+	ld c,(hl)
+	inc hl
+	ld b,(hl)
+	ld (message_ptr),bc
+
+
+;------------------------------------------------------
+;Force it to show the next item in the correct language
+
+	ld a,scroll_t
+	ld (hand_mode),a
+	ld a,w5_ysize/2
+	ld (w5_count),a
+	jp rest_back
+
+
+;=====================================================================
+;Re plots the hand. Which includes grabbing a new background and
+;finally plotting the hand
+
+show_hand	call rest_back	;restore the background
+	call do_flag
+	call get_back	;get new background
+
+	ld hl,(hot_x)
+	ld (blit_hand+DSTAD0),hl
+	ld hl,blit_hand
+	blit_run cpmpage,031h	;dest update copy
+	ret
+
+
+;---------------------------------------------------------------------
+;Draw the 2 arrows, and the 'NEXT ITEM' boxes into window 2. Also
+;set up a pointer to the list of strings describing the next item
+
+init_lang	ld hl,up_blit		;copy arrows + box up
+	blit_run cpmpage,031h
+
+;-------------------
+
+	ld a,(cur_win)
+	push af		;save current window
+	ld a,2
+	current
+	ld bc,256*3+arro1_x+arro_w+arro_w+2
+	hcursor
+
+;-------------------
+
+	ld hl,e_nexti
+	ld a,(language)
+	and a
+	jr z,$2
+	ld hl,f_nexti
+	dec a
+	jr z,$2
+	ld hl,g_nexti
+$2	pstring
+
+	pop af	;restore to old window
+	current
+
+
+;-------------------
+
+	ld hl,eng_ptr
+	ld a,(language)
+	and a
+	jr z,$1
+	ld hl,fre_ptr
+	dec a
+	jr z,$1
+	ld hl,ger_ptr
+
+$1	ld (list_ptr),hl		;set up NEXT ITEM ptr
+	ret
+
+
+;---------------------------------------------------------------------
+;Display (in window 5) the next item for display
+
+show_next	ld a,5
+	current	;window for printing the string in
+	ld bc,0
+	hcursor	;at 0,0 in the window
+
+	ld hl,(list_ptr)
+	ld a,(next_bit)
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ex de,hl	;hl points to a string
+
+	pstring
+
+	ld a,3
+	current
+	ret
+
+
+;------------------------------------------------------
+;Display (in window 6) the current item being displayed
+
+show_this	ld a,6
+	current	;window for printing the string in
+	ld bc,0
+	hcursor	;at 0,0 in the window
+
+	ld hl,eng_cur
+	ld a,(language)
+	and a
+	jr z,$1
+	ld hl,fre_cur
+	dec a
+	jr z,$1
+	ld hl,ger_cur	;choose string for printing
+
+$1	ld a,(which_bit)
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ex de,hl	;hl points to a string
+
+	pstring
+
+	ld a,3
+	current
+	ret
+
+
+;---------------------------------------------------------------------
+
+half_meg	equ 8		;top 4 bits of 1/2 meg pages
+
+flag_temp	defb 0,0,half_meg	;source
+	defb 0,0,scrbase	;dest
+	defb 0
+	defb 0c0h	;log_cmp
+	defb 24,30,226	;outer, inner, step
+	defb 0,0
+
+
+;-------------------
+
+back_temp	defb 0,0,scrbase		;source
+	defw hand_buf
+	defb cpmpage 		;dest
+	defb 0,0c0h		;mode, log_cmp
+	defb hand_y,hand_x	;outer, inner
+	defb 256-hand_x		;step
+	defb 0,0
+
+	defw hand_buf
+	defb cpmpage		;source
+	defb 0,0,scrbase 		;dest
+	defb 0,0c0h		;mode, log_cmp
+	defb hand_y,hand_x	;outer, inner
+	defb 256-hand_x		;step
+	defb 0,0
+
+	defw hand_def
+	defb half_meg		;source at 1/2 meg ish
+	defb 0,0,scrbase		;dest
+	defb 0,0c8h		;ignore transparent
+	defb hand_y,hand_x
+	defb 256-hand_x
+	defb black,0
+
+;-------------------
+
+up_blit	defw up_arro		;blits to copy arrow up
+	defb half_meg
+	defb arro1_x,arro_y,scrbase
+	defb 0,0c0h
+	defb arro_h,arro_w
+	defb 256-arro_w
+	defb 0,031h
+
+	defw down_arro
+	defb half_meg
+	defb arro2_x,arro_y,scrbase
+	defb 0,0c0h
+	defb arro_h,arro_w
+	defb 256-arro_w
+	defb 0,0
+
+
+;--------------------
+;Window 5 scroll blit
+
+wind5_scrl	defb w2_xs,w2_ys+w5_yoff+2,scrbase
+	defb w2_xs,w2_ys+w5_yoff,scrbase
+	defb 0,0c0h
+	defb w5_ysize-2,w2_xz
+	defb 256-w2_xz
+	defb 0,0
+
+
+;---------------------------------------------------------------
+;Window 3 (and 6) scroll blit. Scrolls KONIX out of the window !
+
+konix_b1	defb w3_xs+5,w3_ys,scrbase
+	defb w3_xs,w3_ys,scrbase
+	defb 0,0c0h
+	defb 1,w3_xz-5
+	defb 256-w3_xz+5
+	defb 0,039h
+
+konix_b2	defb w3_xs+w3_xz-5,w3_ys+w3_yz,scrbase
+	defb w3_xs+w3_xz,w3_ys+w3_yz,scrbase
+	defb 192,0c0h
+	defb 1,w3_xz-5
+	defb 256-w3_xz+5
+	defb 0,039h
+

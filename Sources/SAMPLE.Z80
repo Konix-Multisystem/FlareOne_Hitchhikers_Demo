@@ -1,0 +1,150 @@
+; This file contains all the code for handling the replay of samples
+
+; This routine is called to set up the DSP for replay
+
+init_sound	ld hl,dsp_chunk2
+	load_dsp
+
+	ld hl,DSP_progst2
+	run_dsp
+	ret
+
+; Play the explosion sample
+
+explode_r	xor a			; no repeat
+	ld bc,bang_len
+	ld ix,bang_lo
+	ld de,bang_hi
+	jp smple_rght
+
+explode_l	xor a			; no repeat
+	ld bc,bang_len
+	ld ix,bang_lo
+	ld de,bang_hi
+	jp smple_left
+
+; The following routines handle the Z80 end of sample playback
+
+; The next two routines are used to wait for the end of a sample on the
+; left channel. First SET_LFIN is called, then CHECK_LFIN is called
+; repeatedly and will set the carry when the sample has finished.
+
+set_lfin	ld hl,1
+	ld (l_Z80fin),hl		; set left channel not finished
+	ret
+
+check_lfin	ld hl,(l_Z80fin)
+	ld a,h
+	or l
+	jr nz,$1		; not finished yet
+	scf			; set carry
+	ret
+$1	and a			; clear carry
+	ret
+
+
+; The next two routines are used to wait for the end of a sample on the
+; right channel. First SET_RFIN is called, then CHECK_RFIN is called
+; repeatedly and will set the carry when the sample has finished.
+
+set_rfin	ld hl,1
+	ld (r_Z80fin),hl		; set right channel not finished
+	ret
+
+check_rfin	ld hl,(r_Z80fin)
+	ld a,h
+	or l
+	jr nz,$1		; not finished yet
+	scf			; set carry
+	ret
+$1	and a			; clear carry
+	ret
+
+
+; The following data are flags stating whether or not the left and right
+; samples have finished.
+
+	IF (var_pc & 1)		; put PC on even boundary
+	USER_VAR nowt,1
+	ENDIF
+
+	USER_VAR l_Z80fin,2	; flag for left channel
+	USER_VAR r_Z80fin,2	; flag for left channel
+
+
+; The following routine sets up a sample to play on the left channel
+; The parameters are as follows
+; A  : repeat flag, 0=NO, 1=YES
+; IX : low word of source address
+; DE : top nibble of source address
+; BC : sample length in words
+
+smple_left	push de	; stop sample play
+	ld hl,l_len/2
+	ld de,0
+	write_dsp
+	pop de
+
+	ld hl,l_adrhi/2	; set sample address high word
+	write_dsp
+	ld hl,l_rephi/2	; ditto for repeat
+	write_dsp
+
+	push ix	; now write out low word of the sample address
+	pop de
+	ld hl,l_adrlo/2	; set sample address low word
+	write_dsp
+	ld hl,l_replo/2	; ditto for repeat
+	write_dsp
+
+	ld d,b	; now write out the sample length in words
+	ld e,c
+	ld hl,l_len/2
+	write_dsp
+	ld hl,l_replen/2	; ditto for repeat
+	write_dsp
+
+	ld e,a	; now write out the repeat flag
+	ld d,0
+	ld hl,l_repeat/2
+	write_dsp
+	ret
+
+
+; The following routine sets up a sample to play on the right channel
+; The parameters are as follows
+; A  : repeat flag, 0=NO, 1=YES
+; IX : low word of source address
+; DE : top nibble of source address
+; BC : sample length in words
+
+smple_rght	push de	; stop sample play
+	ld hl,r_len/2
+	ld de,0
+	write_dsp
+	pop de
+
+	ld hl,r_adrhi/2	; set sample address high word
+	write_dsp
+	ld hl,r_rephi/2	; ditto for repeat
+	write_dsp
+
+	push ix	; now write out low word of the sample address
+	pop de
+	ld hl,r_adrlo/2	; set sample address low word
+	write_dsp
+	ld hl,r_replo/2	; ditto for repeat
+	write_dsp
+
+	ld d,b	; now write out the sample length in words
+	ld e,c
+	ld hl,r_len/2
+	write_dsp
+	ld hl,r_replen/2	; ditto for repeat
+	write_dsp
+
+	ld e,a	; now write out the repeat flag
+	ld d,0
+	ld hl,r_repeat/2
+	write_dsp
+	ret

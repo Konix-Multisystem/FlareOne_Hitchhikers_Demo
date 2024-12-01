@@ -1,0 +1,15 @@
+Found Section Flare One
+Found Section Execute : 4000:0400
+Found Section Load Memory : 8000:0000   (00002B60 bytes)
+Found Section Load Memory : 8400:0000   (00003831 bytes)
+Found Section Load Memory : 8800:0000   (000028B4 bytes)
+Found Section Load Memory : 8C00:0000   (00002AE5 bytes)
+Found Section Load Memory : 9000:0000   (00002BA9 bytes)
+Found Section Load Memory : 9400:0000   (00003CC6 bytes)
+Found Section Load Memory : 9800:0000   (000011F4 bytes)
+Found Section Load Memory : 9C00:0000   (00002DC6 bytes)
+Found Section Load Memory : 4040:0000   (0000BFD3 bytes)
+Unable to locate Joystick, using keyboard controls
+ - Note Analogue functionality will not work!
+
+Opened Generic Software Device

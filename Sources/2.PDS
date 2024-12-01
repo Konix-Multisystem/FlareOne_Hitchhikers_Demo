@@ -1,0 +1,150 @@
+
+;=====================================================================
+;REAL life data for the demo program
+
+drive	defw shape1
+	defb cpmpage		;where the 3d coords are !
+	defw faces1		;connection information pointer
+	defw -32		;initial magnification factor
+	defb 5,2		;pline speed, halt value
+	defb 238,122		;x,y spin to values
+	defb 252		;magnification factor * 4
+	defw d_drive		;PAGE 33
+	defb 8		;20 bit pointer
+	defb 25+w1_xs,42+w1_ys	;coords for placement
+	defb 0		;number of labels
+
+
+;---------------------------------------------------------------------
+
+keypad	defw shape2
+	defb cpmpage		;where the 3d coords are !
+	defw faces2		;connection information pointer
+	defw -56		;initial magnification factor
+	defb 3,2		;pline speed, halt value
+	defb 106,164		;x,y spin to values
+	defb 252		;magnification factor * 4
+	defw k_pad		;PAGE 35
+	defb 8		;20 bit pointer
+	defb 31+w1_xs,13+w1_ys	;coords for placement
+
+	defb 2		;number of labels
+	defw key_lbl_b
+	defw key_lbl_f
+	defw key_lbl_g		;pointers to language labels
+
+
+;---------------------------------------------------------------------
+
+joyheli	defw shape3
+	defb cpmpage		;where the 3d coords are !
+	defw faces3		;connection information pointer
+	defw -80		;initial magnification factor
+	defb 2,2		;pline speed, halt value
+	defb 220,234		;x,y spin to values
+	defb 148		;magnification factor * 4
+	defw h_joy		;PAGE 34
+	defb 8		;20 bit pointer
+	defb 55+w1_xs,10+w1_ys	;coords for placement
+
+	defb 2		;number of labels
+	defw joy_lbl_b
+	defw joy_lbl_f
+	defw joy_lbl_g		;pointers to language labels
+
+
+;---------------------------------------------------------------------
+
+chair	defw shape4
+	defb cpmpage		;where the 3d coords are !
+	defw faces4		;connection information pointer
+	defw -48		;initial magnification factor
+	defb 2,0		;pline speed, halt value
+	defb 26,250		;x,y spin to values
+	defb 176		;magnification factor * 4
+	defw d_chair		;PAGE 36
+	defb 9		;20 bit pointer
+	defb 27+w1_xs,13+w1_ys	;coords for placement
+
+	defb 2		;number of labels
+	defw chr_lbl_b
+	defw chr_lbl_f
+	defw chr_lbl_g		;pointers to language labels
+
+
+;---------------------------------------------------------------------
+
+lightgun	defw shape5
+	defb cpmpage		;where the 3d coords are !
+	defw faces5		;connection information pointer
+	defw 112		;initial magnification factor
+	defb 2,1		;pline speed, halt value
+	defb 20,16		;x,y spin to values
+	defb 252		;magnification factor * 4
+	defw lite_gun		;PAGE 34
+	defb 8		;20 bit pointer
+	defb 30+w1_xs,39+w1_ys	;coords for placement
+
+	defb 2		;number of labels
+	defw gun_lbl_b
+	defw gun_lbl_f
+	defw gun_lbl_g		;pointers to language labels
+
+
+;---------------------------------------------------------------------
+
+slip1	defw shape6
+	defb cpmpage		;where the 3d coords are !
+	defw faces6		;connection information pointer
+	defw -32		;initial magnification factor
+	defb 2,0		;pline speed, halt value
+	defb 0,12		;x,y spin to values
+	defb 252		;magnification factor * 4
+	defw bike		;PAGE 37
+	defb 9		;20 bit pointer
+	defb 34+w1_xs,31+w1_ys	;coords for placement
+
+	defb 2		;number of labels
+	defw kms1_lbl_b
+	defw kms1_lbl_f
+	defw kms1_lbl_g		;pointers to language labels
+
+
+;---------------------------------------------------------------------
+
+slip2	defw shape7
+	defb cpmpage		;where the 3d coords are !
+	defw faces7		;connection information pointer
+	defw -32		;initial magnification factor
+	defb 2,0		;pline speed, halt value
+	defb 232,8		;x,y spin to values
+	defb 252		;magnification factor * 4
+	defw plane		;PAGE 38
+	defb 9		;20 bit pointer
+	defb 21+w1_xs,33+w1_ys	;coords for placement
+
+	defb 5		;number of labels
+	defw kms2_lbl_b
+	defw kms2_lbl_f
+	defw kms2_lbl_g		;pointers to language labels
+
+
+;---------------------------------------------------------------------
+
+slip3	defw shape8
+	defb cpmpage		;where the 3d coords are !
+	defw faces8		;connection information pointer
+	defw -32		;initial magnification factor
+	defb 2,0		;pline speed, halt value
+	defb 10,10		;x,y spin to values
+	defb 252		;magnification factor * 4
+	defw wheel		;PAGE 33
+	defb 8		;20 bit pointer
+	defb 40+w1_xs,19+w1_ys	;coords for placement
+
+	defb 2		;number of labels
+	defw kms3_lbl_b
+	defw kms3_lbl_f
+	defw kms3_lbl_g		;pointers to language labels
+
+

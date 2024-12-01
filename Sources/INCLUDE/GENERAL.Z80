@@ -1,0 +1,112 @@
+
+
+;---------------------------------------------------------------------
+;Include files which contain definitions for use by the user
+;
+;The first label BLITNUM is set by the user to define how many blit
+;blocks there will be (MAX) in a blitter list. Used in DEFS.INC
+;
+
+BLITNUM	equ 256	;current limit
+
+	include d:\pds\work\include\defs.inc				;general defs include file
+	include d:\pds\work\include\low_inc.inc	;LOW level rotuine MACROs
+	include d:\pds\work\include\dsp_ass.inc	;DSP assembler MACROs
+
+
+;---------------------------------------------------------------------
+;Place the data in the correct banks NOW  NOW  NOW  NOW
+;
+;This is done before the program is assembled because, well why not.
+;No, sorry, its their bloody BANK command. Doin' the data first
+;simplifies the structure of this file.
+;
+	org ORG_DATA	;where the page is paged into. A MUST
+
+	nop		;the data !
+	bank 32	;place it at 1/2 Meg (80000h)
+
+
+;---------------------------------------------------------------------
+;Defines for use in this program
+;The users variable space follows on from the low-level routine space,
+;and variables should be entered as follows:
+;
+;	USER_VAR <variable name>,size
+;
+;All variables should be entered before the IF statement, because a
+;check is made using this statement, to see if the memory limit is
+;being exceeded.
+;
+
+;User definitions go here
+
+
+	IF var_pc>65530	;test on upper memory limit
+	ERROR "Warning, User and System variables close to limit
+	ENDIF
+	IF var_pc<51200	;test on wrap around !
+	ERROR "User and System variables have wrapped around memory
+	ENDIF
+
+
+;---------------------------------------------------------------------
+;The start of the program
+
+	org CODE_START		;program start (define in DEFS.INC)
+	send COMPUTER1		;KAS is on computer1 link
+	exec CODE_START		;execution address upon downloading
+
+
+;---------------------------------------------------------------------
+;User code goes here !
+
+	initialise		;This is standard
+
+;user code goes here....	
+
+	jp 256		;return to PDS. Does it ?
+
+
+;---------------------------------------------------------------------
+;Include the Users DSP program and data, written in a separate file.
+;The only label which should be referenced from this file is:
+;
+;	dsp_chunk
+;
+;The address for dsp_run which hl contains should be : DSP_progst
+;
+
+	include d:\pds\work\include\dsp_temp.inc
+
+
+;---------------------------------------------------------------------
+;Data for the windows involved in this program
+
+
+;---------------------------------------------------------------------
+; Include the other files for assembly now.
+
+	include d:\pds\work\include\low_a.z80
+	include d:\pds\work\include\low_b.z80
+
+
+;---------------------------------------------------------------------
+;Set bank to 19, ie. the normal (EPROM) bank for 49152-65535 inclusive
+;Unfortunately PDS has a bug ! Hence the need for the org and nop
+;which follow the bank command..
+;
+;The 'bank 19' command ensures that the Z80 code is placed into RAM
+;with the correct page in the Z80 address space.
+;
+;	Aarghh  B A S T A R D S....
+;
+
+	bank TOP_PAGE	;BUGFIX see above
+
+	org 65535
+	nop
+
+
+	end		;STOP assembly after this file....
+

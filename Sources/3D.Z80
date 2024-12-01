@@ -1,0 +1,201 @@
+; The following are the routines to handle the 3d graphics.
+; To use any of them call the appropriate MACRO as defined in 'MACROS3D.INC'.
+
+	USER_VAR part_flag,1   ; 0=off, 1=on (Partial line drawing)
+
+; Routine to generate the blitter list for the 3D stuff
+
+; The face structure is as follows
+;
+;
+; num_lines	; 1 word
+;
+; then num_lines times:
+;
+; start_vertex	; 1 word
+; end_vertex	; 1 word
+; colour		; 1 word
+
+; On entry HL = pointer to face information
+
+
+
+drw_3d	ld c,(hl)
+	inc hl
+	ld b,(hl)
+	inc hl	; number of lines for the shape
+
+;-------------------
+
+	ld a,(part_flag)
+	and a
+	jp nz,pdrw_3d	; separate routine for partial drawing them
+
+;-------------------
+
+$1	push bc
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl	; get the pointer out
+	ex de,hl
+
+	ld c,(hl)
+	inc hl
+	inc hl
+	ld b,(hl)	; get the X and Y coords out
+	ex de,hl
+
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl	; get the end pointer out
+	ex de,hl
+
+	ld a,(hl)
+	inc hl
+	inc hl
+	ld h,(hl)
+	ld l,a	; X and Y into HL this time
+	ex de,hl
+
+	line		; put the line in the blitter list
+
+	pop bc	; number of lines left
+	dec bc
+	ld a,b
+	or c
+	jr nz,$1
+	ret
+
+
+;---------------------------------------------------------------------
+;Partial line drawing version of the above. Jumped to from the above
+;if the partial line flag
+
+pdrw_3d	push bc
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl	; get the pointer out
+	ex de,hl
+
+	ld c,(hl)
+	inc hl
+	inc hl
+	ld b,(hl)	; get the X and Y coords out
+	ex de,hl
+
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl	; get the end pointer out
+	ex de,hl
+
+	ld a,(hl)
+	inc hl
+	inc hl
+	ld h,(hl)
+	ld l,a	; X and Y into HL this time
+	ex de,hl
+
+	pline		; put the line in the blitter list
+
+	pop bc	; number of lines left
+	dec bc
+	ld a,b
+	or c
+	jr nz,pdrw_3d
+	ret
+
+
+;----------------------------------------------------------------------
+; Routine to set up the vertex rotational data and to set the DSP going
+
+clc_3d	ld hl,sin_tab
+	ld de,dsp_src	; storage for the various sines and cosines
+	push bc
+	ld b,0
+	add hl,bc	; get sin X
+	add hl,bc
+	ldi
+	ldi
+	
+	pop bc	; get cos X
+	push bc
+	ld b,0
+	ld a,64	; calc pos in sin table of the cos X
+	add c		; cos(X) = sin(X + 90)
+	ld c,a
+	ld hl,sin_tab
+	add hl,bc
+	add hl,bc
+	ldi
+	ldi
+
+	pop bc	; get sin Y
+	ld c,b
+	ld b,0
+	push bc
+	ld hl,sin_tab	; calc pos in sin table of the sin Y
+	add hl,bc
+	add hl,bc
+	ldi
+	ldi
+
+	pop bc	; get cos Y
+	ld a,64	; calc pos in sin table of the cos Y
+	add c		; cos(Y) = sin(Y + 90)
+	ld c,a
+	ld hl,sin_tab
+	add hl,bc
+	add hl,bc
+	ldi
+	ldi
+
+	ld hl,0	; clear DSP finished flag
+	ld (dsp_fin),hl
+
+	ld hl,DSP_progst
+	run_dsp
+	ret
+
+
+; Routine to wait for the DSP to finish if it hasn't already
+
+w_3d	ld a,(dsp_fin)
+	cp 255	; terminate code ?
+	jr nz,w_3d
+
+	xor a
+	out (14H),a	; bug fix	
+
+	ret
+
+
+; Sin table data (all values are 16 bit signed and are 128 * sin X)
+; 256 values
+
+sin_tab	defw 0,3,6,9,12,16,19,22,25,28,31,34,37,40,43,46
+	defw 49,52,55,58,60,63,66,68,71,74,76,79,81,84,86,88
+	defw 90,93,95,97,99,101,103,105,106,108,110,111,113,114,116,117
+	defw 118,119,120,121,122,123,124,125,125,126,126,126,127,127
+	defw 127,127
+	defw 127,127,127
+	defw 127,127,126,126,126,125,125,124,123,122,121,120,119,118
+	defw 117,116,114,113,111,110,108,106,105,103,101,99,97,95,93,90
+	defw 88,86,84,81,79,76,74,71,68,66,63,60,58,55,52,49
+	defw 46,43,40,37,34,31,28,25,22,19,16,12,9,6,3
+
+	defw 0,-3,-6,-9,-12,-16,-19,-22,-25,-28,-31,-34,-37,-40,-43,-46
+	defw -49,-52,-55,-58,-60,-63,-66,-68,-71,-74,-76,-79,-81,-84,-86,-88
+	defw -90,-93,-95,-97,-99,-101,-103,-105,-106,-108,-110,-111,-113,-114,-116,-117
+	defw -118,-119,-120,-121,-122,-123,-124,-125,-125,-126,-126,-126,-127,-127
+	defw -127,-127
+	defw -127,-127,-127
+	defw -127,-127,-126,-126,-126,-125,-125,-124,-123,-122,-121,-120,-119,-118
+	defw -117,-116,-114,-113,-111,-110,-108,-106,-105,-103,-101,-99,-97,-95,-93,-90
+	defw -88,-86,-84,-81,-79,-76,-74,-71,-68,-66,-63,-60,-58,-55,-52,-49
+	defw -46,-43,-40,-37,-34,-31,-28,-25,-22,-19,-16,-12,-9,-6,-3
+
+

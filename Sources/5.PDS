@@ -1,0 +1,466 @@
+
+;=====================================================================
+;English descriptions
+;=====================================================================
+
+
+joy_b	defb 13,13,13
+	defb "Add a helicopter stick and your Konix Multi-System is equipped"
+	defb "for even more realistic gameplay.  It simply  screws  into the"
+	defb "control unit and plugs into one of  the  joystick  ports.  The"
+	defb "helicopter stick  will not  only  then  let you  move  left or"
+	defb "right, forward or back, but also rotate.  There is also a fire"
+	defb "button  conveniently located at the top of the  stick  to help"
+	defb "you get out of  those  sticky  situations. Being made by Konix"
+	defb "you can be sure it is very robust and really reliable.",0
+
+
+light_b	defb 13,13,13
+	defb "Plugged  into one of the  joystick  ports on the control unit,"
+	defb "the lightgun has space-age styling that really looks the part."
+	defb "It has a recoil  action too,  so you will  feel it as you fire"
+	defb "it.  You can clip on a hand  grip and  butt as well to convert"
+	defb "it into a rifle.  With its 'auto fire' switch, it even becomes"
+	defb "a machine gun,  giving you all the fire  power you need to get"
+	defb "out of the  tightest spots.  And, coming from Konix of course,"
+	defb "it's not only well designed but also deadly accurate.",0
+
+
+chair_b	defb 13,13,13
+	defb "Sit in the  Konix Multi-System  Powered  Chair and you'll feel"
+	defb "every sensation. Powerful motors in it respond to your actions"
+	defb "in an  unimaginably  realistic way.  As you corner,  it tilts;"
+	defb "hit a ketb and you'll feel  the bump;  bank steeply in a plane"
+	defb "and the  chair  banks too.  The TV is mounted  on the chair so"
+	defb "that  it  moves  with  you for  even  more  realism.  For full"
+	defb "security, there's a seat belt attatched and the wide base with"
+	defb "low level of gravity gives maximum stability.  There's also an"
+	defb "optional  full size cover you can add which 'wraps round' you,"
+	defb "putting you in your own private  world.  And, to  complete the"
+	defb "effect, you can even  add a  special  customising  pack  which"
+	defb "includes styling panels and stereo speakers for real VROOOM.",0
+
+
+drive_b	defb 13,13,13
+	defb "Included free with each  Konix Multi-System  is a standard 3.5"
+	defb "inch disk drive for really cost effective  software.  The disk"
+	defb "can store a massive 880k of pure arcade  action.  Part of each"
+	defb "game disk can also be written to,  so you can save those great"
+	defb "hi-scores for another day.",0
+	
+
+
+key_b	defb 13,13,13
+	defb "Games  requiring the most complex user interaction are catered"
+	defb "for by  another  accessory,  the  Konix  Multi-System  Keypad."
+	defb "It has twelve stylish keys -  ten of which are digits, leaving"
+	defb "the other  two as  multi-purpose  function  keys.  The  keypad"
+	defb "simply plugs into one of the  joystick ports and is then ready"
+	defb "to use.",0
+
+
+car_b	defb 13,13,13
+	defb "With the steering wheel attached,  the  Konix Multi-System can"
+	defb "put you in complete control of a high  performance Formula One"
+	defb "racing car.  Turn the wheel and it responds  instantly to your"
+	defb "every move. Not only that but the steering column has  tactile"
+	defb "feedback, so you can actually feel the vibration of the wheels"
+	defb "on the  tarmac.  For even more  realism there is a  gear shift"
+	defb "mounted on the right hand  side of  the control unit, and  two"
+	defb "detachable  foot  pedals. Put your foot  down to accelerate or"
+	defb "brake  hard as  you  approach  a  corner and  the  response is"
+	defb "immediate.",0
+
+
+bike_b	defb 13,13,13
+	defb "By adjusting the mode selector on the left of the control unit"
+	defb "and turning  down the handle  bars the Konix Multi-System is a"
+	defb "motorbike, screaming around a race track. The tactile feedback"
+	defb "will give you the  nerve-tingling  sensation of  riding on two"
+	defb "wheels.  Added to  that there are two independent fire buttons"
+	defb "positioned  just under  your  thumbs,  should your  journey be"
+	defb "fraught with danger.  With the  Multi-System as a bike you get"
+	defb "all the thrills and spills without ever falling off.",0
+
+
+plane_b	defb 13,13,13
+	defb "Just a flick of the mode  selector  and  you can  take  to the"
+	defb "skies with the Konix Multi-System.  The steering column is now"
+	defb "the yoke of an aircraft.  Pull  back on the controls and climb"
+	defb "to new heights of realism.  You can almost feel the G-force as"
+	defb "you bank,  pitch  and  roll  to  avoid  enemy  flak.  The  two"
+	defb "independant  fire buttons give your aircraft enough fire power"
+	defb "to complete the mission - and you're going to need it !",0
+
+
+f_color	defb "    Voici quelques-unes des 4.096 couleurs du Multi-Syst\me",0
+g_color	defb "      Hier sind einige der 4.096 Farben des Multi-system",0
+b_color	defb "       Here are some of the Multi-System's 4096 colours",0
+
+
+;=====================================================================
+;German text for descriptions
+;=====================================================================
+
+joy_g	defb 13,13,13
+	defb "Mit  einem  Hubschrauberkn^ppel  ist  Ihr  Konix  Multi-System"
+	defb "sogar noch realistischer. Er l@*t sich einfach in das Leitwerk"
+	defb "einschrauben  und  wird an einem der  Kan@le am  Steuerkn^ppel"
+	defb "angesteckt.  Der  Hubschrauber-Steuerkn^ppel  erm_glicht  dann"
+	defb "nicht nur eine  Bewegung  nach  rechts  oder links,  vor- oder"
+	defb "r^ckw@rks,  sondern  auch  eine  Rotation.  Au*erdem  ist  ein"
+	defb "Schie*knopf  g^nstig am  oberen Teil des Kn^ppels  angebracht,"
+	defb "der es Ihnen erm_glicht, sich aus einer  brenzligen  Situation"
+	defb "zu retten. Der Kn^ppel wird von der Firma  Konix  hergestellt,"
+	defb "und  deshalb  k_nnen  Sie  sicher sien, da* er sehr robust und"
+	defb "@u*erst zuverl@ssig ist.",0
+
+
+light_g	defb 13,13,13
+	defb "Die  Lichtpistole  wird an einem der  Kan@le am  Steuerkn^ppel"
+	defb "angesteckt.   Sie  ist  im   Stil   des   Raumfahrt-Zeitalters"
+	defb "konstruiert und sieht sehr echt aus.",13
+	defb "Beim Schie*en f^hlt man sogar ihre  R^cksto*wirkung.  Man kann"
+	defb "auch einen Handgriff und Kolben anbringen und sie damit in ein"
+	defb "Gewehr  verwandeln.  Mit ihrem automatischen Schalter kann man"
+	defb "sie  sogar in ein  Maschinengewehr  verwandeln, wobei sie  die"
+	defb "notwendige  Schu*kraft  verleiht,   um  aus  den  brenzligsten"
+	defb "Situationen  herauszukommen.  Und da sie von der  Firma  Konix"
+	defb "ist, ist sie nicht nur gut  konstruiert,  sondern auch t_dlich"
+	defb "genau.",0
+
+chair_g	defb 13,13,13
+	defb "Wenn man im motorisch betriebenen Stuhl des Konix Multi-System"
+	defb "sitzt,  f^hlt  man  jede  Sensation.   Seine  starken  Motoren"
+	defb "reagieren sehr realistisch  auf jede  Aktion.  Wenn man um die"
+	defb "Ecke f@hrt,  kippt er, wenn man am B^rgersteig anf@hrt,  f^hlt"
+	defb "man den Sto*,  wenn man ein Flugzeug in die  Querlage  bringt,"
+	defb "dann begibt sich der Stuhl auch in die Querlage. Der TV ist am"
+	defb "Stuhl  angebracht und  bewegt sich  gleichzeitig,  wodurch die"
+	defb "ganze  Sache noch realistischer  wird.  Zur  Gew@hreistung der"
+	defb "Sicherheit ist ein  Sitzgurt  vorhanden, und die breite  Basis"
+	defb "mit dem niedrigen Schwerpunkt bietet eine optimale Stabilit@t."
+	defb "Au*erdem gibt es auf Wunsch eine Abdeckung voller  Gr_*e,  die"
+	defb "Sie um sich  wickeln  k_nnen, so da* Sie sich in Ihrer eigenen"
+	defb "privaten   Welt   befinden.   Und  um   die  Wirkung  noch  zu"
+	defb "vervollkommnen,  gibt  es  sogar  eine  speziell  angefertigte"
+	defb "Packung mit Bedienungspult und Stereo-Lautsprecher.",0
+
+
+drive_g	defb 13,13,13
+	defb "In jedem Konix Multi-System ist  kostenlos ein standardm@*iges"
+	defb "Plattenlaufwerk   (3,5 inch)   f^r   wirklich   preisg^nstiges"
+	defb "Software enthalten. Die Platte kann die riesige Menge von 880K"
+	defb "reiner  Aktion speichern.  Auf einen  Teil jeder  Spieleplatte"
+	defb "kann man auch schreiben, so da* man das hohe Spielergebnis bis"
+	defb "zum n@chsten Mal speichern kann.",0
+
+
+key_g	defb 13,13,13
+	defb "F^r  Spiele,   die   eine   komplizierte   Benutzerinteraktion"
+	defb "ben_tigen,  gibt es ein  weiteres  Zubeh_r,  die  Tastatur des"
+	defb "Konix  Multi-Systems.  Es hat  zw_lf  stilvolle  Tasten - zehn"
+	defb "davon    sind     Ziffern     und     die     anderen     zwei"
+	defb "Mehrzweckfunktionstasten.  Die  Tastatur  wird  an  einem  der"
+	defb "Kan@le    am   Steuerkn^ppel   angesteckt   und   ist   sofort"
+	defb "betriebsbereit.",0
+
+
+car_g	defb 13,13,13
+	defb "Wenn das Lenkrad  angebracht  ist,  wird Ihnen damit die ganze"
+	defb "Kontrolle  eines  leistungsstarken  Formel-1-Rennwagens in die"
+	defb "Hand  gegeben.  Man  braucht  nur das Lenkrad zu drehen und es"
+	defb "spricht sofort auf jede  Bewegung an. Und das ist nicht alles."
+	defb "Die Lenks@ule hat eine f^hlbare R^ckwirkung, wodurch man sogar"
+	defb "die Bewegung der Rader auf dem Teer  fuhlen  kann.  Um es noch"
+	defb "realistischer  zu   machen,   sind   rechts  am  Leitwerk  ein"
+	defb "Gangschalter und zwei abnehmbare Fu*pedale angebracht. Dr^cken"
+	defb "Sie mit dem Fu* zum Beschleunigen, oder bremsem Sie fest, wenn"
+	defb "Sie an eine Kurve kommen - es reagiert sofort.",0
+
+
+bike_g	defb 13,13,13
+	defb "Durch  Einstellen  des  Betriebsartenw@hlers links am Leitwerk"
+	defb "und  Hinunterdrehen  des  Lenkrads wird das Konix Multi-System"
+	defb "in ein Motorrad verwandelt, das um die Rennbahn herumrast. Die"
+	defb "f^hlbare R^ckwirkung  gibt  Ihnen  den  Nervenkitzel,  den das"
+	defb "Fahren auf zwei  R@dern  bewirkt.   Dazu  gibt  es  noch  zwei"
+	defb "unabh@ngige   Schie*kn_pfe,  die  direkt  unter  Ihren  Daumen"
+	defb "angebracht  sind,  falls  sich   auf   Ihrer   Fahrt  Gefahren"
+	defb "einstellen.  Mit dem  Multi-System als Motorrad erlebt man die"
+	defb "Aufregung und St^rze, ohne jemals zu fallen.",0
+
+
+plane_g	defb 13,13,13
+	defb "Man  braucht nur den  Betriebsartenw@hler einstellen und schon"
+	defb "kann man mit diesem Konix Multi-System in die L^fte gehen. Die"
+	defb "Lenks@ule ist nun das Lenkwerk eines Flugzeugs. Ziehen Sie die"
+	defb "Lenkung zur^ck und  steigen  Sie zu neuen H_hen des Realismus."
+	defb "Man kann fast den Andruck f^hlen, wenn man das Flugzeug in die"
+	defb "Querlage bringt, es neigt und dreht,  um dem Feuer des Feindes"
+	defb "zu entgegen.  Die  zwei  unabh@ngigen  Schie*kn_pfe  geben dem"
+	defb "Flugzeug  die   Schu*raft,  die  zur  Beendung  des  Einsatzes"
+	defb "notwendig ist - und Sie werden sie auch brauchen!",0
+
+
+;=====================================================================
+;French descriptions
+;=====================================================================
+
+
+joy_f	defb 13,13,13
+	defb	"Ajoute un manche $ balai  d'h]licopt\re,  et  voil$ ton Multi-"
+	defb	"Syst\me  Konix  ]quip]  pour  jeux  encore plus  r]alistes. Le"
+	defb	"manche se visse  tout  simplement $ l'unit]  de commande et se"
+	defb	"branche  dans  un  des  ports  de  joystick. Il te  permet non"
+	defb	"seulement  d'aller  $  droite,  $   gauche,  d'avancer  et  de"
+	defb	"reculer, mais aussi  d'effectuer  des  rotations. Il y a aussi"
+	defb	"un  bouton  de  tir  judicieusement  situ]  $  l'extr]mit]  du"
+	defb	"manche pour  t'aider $ te sortir de  situations  ]pineuses. Et"
+	defb	"comme il est  fabriqu]  par  Konix, tu peux /tre s{r qu'il est"
+	defb	"tr\s robuste et vraiment fiable. ",0
+
+
+light_f	defb 13,13,13
+	defb	"Branch] dans  l'un  des  ports  de  joystick  sur  l'unit]  de"
+	defb	"commande, le pistolet lumineux  semble  vraiment  appartenir $"
+	defb	"l'\re  spatiale. Il est aussi dot] d'un effet de recul, ainsi,"
+	defb	"tu sens le coup  partir.  Tu peux aussi y fixer une poign]e et"
+	defb	"une  crosse  pour en  faire un  fusil. Avec  son  bouton ""tir-"
+	defb	"automatique""  il se  transforme  m/me en  mitrailleuse pour te"
+	defb	"donner toute la puissance de tir  n]cessaire  pour te tirer de"
+	defb	"situations  p]rilleuses.  Et comme c'est un produit  Konix, il"
+	defb	"est bien  s{r  non  seulement  bien  conu  mais  aussi  d'une"
+	defb	"pr]cision impitoyable. ",0
+
+
+chair_f	defb 13,13,13
+	defb	"Assieds-toi  dans  la  chaise  du  Multi-Syst\me  Konix  et tu"
+	defb	"perois chaque sensation. De  puissants  moteurs $  l'int]rieur"
+	defb	"de la  chaise t'ob]issent avec un r]alisme inimaginable.  Elle"
+	defb	"s'incline  lorsque  tu  prends  un  virage,  tu sens  le  choc"
+	defb	"lorsque tu heurtes le trottoir. Si ton  avion  vire  pench] la"
+	defb	"chaise se penche  elle  aussi. La  t]l]vision  est  mont]e  de"
+	defb	"r]alisme encore.  Pour une s]curit]  totale, une  ceinture  de"
+	defb	"s]curit]  est  fix]e $ la  chaise  et la large  base, avec son"
+	defb	"centre  de  gravit]  bas, conf\re  une  stabilit]  maximum. Il"
+	defb	"existe aussi  en  option un  capot grandeur nature que tu peux"
+	defb	"ajouter  et  qui   ""t'enveloppe"",   te   permettant  ainsi  de"
+	defb	"t'isoler dans ton propre  petit  monde.  Et  pour couronner le"
+	defb	"tout,  il  existe   m/me   du   mat]riel  de  personnalisation"
+	defb	"comprenant des panneaux  de  stylisation et des hauts-parleurs"
+	defb	"st]r]o qui crachent des vrombissements. ",0
+
+
+drive_f	defb 13,13,13
+	defb	"Un lecteur de disque 3,5""  classique est compris  gratuitement"
+	defb	"avec chaque Multi-Syst\me Konix  pour des  ludiciels  vraiment"
+	defb	"rentables. Le disque peut stocker 880k  d'action  dans le plus"
+	defb	"pur style des  machines $ jeux.  L'""]criture"" est possible sur"
+	defb	"une  partie de  chaque  disque  de  jeux,  et  tu  peux  ainsi"
+	defb	"conserver tes  meilleurs  scores pour reprendre ta partie plus"
+	defb	"tard.",0
+
+
+key_f	defb 13,13,13
+	defb	"Il existe un autre  accessoire  pour  les jeux qui n]cessitent"
+	defb	"une interaction plus  complexe de la  part  de  l'utilisateur:"
+	defb	"le  clavier du  Multi-Syst\me Konix. Il  comporte  12  touches"
+	defb	"dot]es  d'une  certaine  ]l]gance,  des caract\res  num]riques"
+	defb	"pour dix d'entre  elles ce qui  laisse  deux  touches pour des"
+	defb	"fonctions  multiples.  Le  clavie  se  branche simplement dans"
+	defb	"l'un  des ports de joystick et  le voil$ pr/t $ l'utilisation."
+	defb 0
+
+
+car_f	defb 13,13,13
+	defb	"Une  fois le  volant  fix], te  voil$  avec  le  Multi-Syst\me"
+	defb	"Konix  aux  commandes  d'une  voiture de course Formule 1 tr\s"
+	defb	"perform>nte.  Tourne  le  volant et il  ob]it $ chacun  de tes"
+	defb	"mouvements. Non seulement cela, mais la  colonne de  direction"
+	defb	"te communique  des  sensations  tactiles, te  permettant ainsi"
+	defb	"de  percevoir  les  vibrations  des roues sur le macadam. Pour"
+	defb	"plus de  r]alisme  encore,  il y a un levier de vitesse, mont]"
+	defb	"sur la  droite de l'unit] de  commande ainsi  que deux p]dales"
+	defb	"d]tachables.  Appuie  pour  acc]l]rer ou freine de  toutes tes"
+	defb	"forces $  l'approche d'un virage et la r]action est imm]diate."
+	defb 0
+
+
+bike_f	defb 13,13,13
+	defb	"Ajuste le s]lecteur de mode $  gauche de  l'unite  de commande"
+	defb	"et baisse le guidon et le  Multi-Syst\me Konix est  maintenant"
+	defb	"une  moto,  p]taradant  autour  d'un  circuit  de  course.  Le"
+	defb	"syst\me  qui  te  communique   des   sensations   tactiles  te"
+	defb	"procurera   les   m/mes   fourmillements  nerveux  que  si  tu"
+	defb	"chevauchais un deux-roues.  En plus, en cas de danger en cours"
+	defb	"de  route,  il y a deux  boutons  de  tir  ind]pendants situ]s"
+	defb	"juste sous tes pouces.  Lorsque le Multi-Syst\me se transforme"
+	defb	"en moto, tu  as  droit  $  tous  les  frissons  et  toutes  le"
+	defb	"culbutes, mais sans jamais tomber.",0
+
+
+plane_f	defb 13,13,13
+	defb	"Appuie  simplement  sur  le s]lecteur de mode et le ciel est $"
+	defb	"toi  gr>ce au  Multi-Syst\me Konix. La  colonne  de  direction"
+	defb	"permet  maintenant  de  piloter  un  avion.  Tire le levier de"
+	defb	"commande pour acc]der aux  nouvelles  limites du  r]alisme. Tu"
+	defb	"peux  presque  sentir  la  force de la pesanteur tandis que tu"
+	defb	"vires, tangues  et  fais  des  tonneaux  pour  ]viter les tirs"
+	defb	"ennemis.  Les  deux  boutons de tir ind]pendants donnent $ ton"
+	defb	"avion une  puissance de tir suffisante  pour  te  permettre de"
+	defb	"mener ta mission $ bien  -  et tu vas  certainement  en  avoir"
+	defb	"besoin !",0
+
+
+;=====================================================================
+;Labels for describing the peripherals
+;
+;The format for these labels is as follows:
+;
+;	x coord, y coord	(for message)  \
+;	string		      |- * num labels
+;	x coord, y coord (for arrow end) /
+
+
+chr_lbl_b	defb 94,45,"Tray for TV",0
+	defb 150,68
+	defb 140,30,"Tray for Multi-System",0
+	defb 174,78
+
+chr_lbl_f	defb 88,45,"Support pour la t]l]vision",0
+	defb 150,68
+	defb 136,30,"Support pour le Multi-Syst\me",0
+	defb 174,78
+
+chr_lbl_g	defb 94,45,"Tisch f^r TV",0
+	defb 150,68
+	defb 136,30,"Tisch f^r das Multi-System",0
+	defb 174,78
+
+
+;=====================================================================
+
+gun_lbl_b	defb 102,30,"Sights for aiming",0
+	defb 158,70
+	defb 110,140,"Clip on butt for rifle mode",0
+	defb 196,106
+
+gun_lbl_f	defb 102,30,"Viseur pour pointer",0
+	defb 158,70
+	defb 88,140,"Crosse s'accrochant",0
+	defb 196,106
+
+gun_lbl_g	defb 102,30,"Visier zum Zielen",0
+	defb 158,70
+	defb 88,140,"Griff f^r Gewehrbetriebsart anklemmen",0
+	defb 196,106
+
+
+;=====================================================================
+
+kms1_lbl_b	defb 88,146,"Steering column locked for stability",0
+	defb 170,114
+	defb 124,42,"Bike handlebars",0
+	defb 150,82
+
+kms1_lbl_f	defb 88,146,"Direction proportionnelle",0
+	defb 170,114
+	defb 124,42,"Guidon de la moto",0
+	defb 150,82
+
+kms1_lbl_g	defb 88,146,"F^r Stabilit@t ist die Lenks@ule gesperrt",0
+	defb 170,114
+	defb 124,42,"Motorradlenker",0
+	defb 150,82
+
+
+;=====================================================================
+
+kms2_lbl_b	defb 128,30,"Yoke",0
+	defb 154,78
+	defb 88,150,"Pull back to climb",0
+	defb 148,102
+	defb 148,138,"Push to dive",0
+	defb 160,98
+	defb 90,56,"Fire button 1",0
+	defb 130,72
+	defb 162,46,"Fire button 2",0
+	defb 178,68
+
+kms2_lbl_f	defb 104,30,"Colone de direction de l'avion",0
+	defb 154,78
+	defb 88,150,"Tirer pour s']lever",0
+	defb 148,102
+	defb 148,138,"Pousser pour piquer",0
+	defb 160,98
+	defb 90,56,"Bouton de tir 1 ",0
+	defb 130,72
+	defb 162,46,"Bouton de tir 2 ",0
+	defb 178,68
+
+kms2_lbl_g	defb 128,30,"Lenkung",0
+	defb 154,78
+	defb 88,150,"Zur Steigung zur^ckziehen",0
+	defb 148,102
+	defb 148,138,"Zum Sturzflug dr^cken",0
+	defb 160,98
+	defb 90,56,"Schie*knopf 1",0
+	defb 130,72
+	defb 162,46,"Schie*knopf 2",0
+	defb 178,68
+
+
+;=====================================================================
+
+kms3_lbl_b	defb 96,30,"Full size steering wheel",0
+	defb 158,62
+	defb 100,148,"Full tactile feedback",0
+	defb 174,98
+
+kms3_lbl_f	defb 96,30,"Volant grandeur nature",0
+	defb 158,62
+	defb 88,148,"Sensations tactiles",0
+	defb 174,98
+
+kms3_lbl_g	defb 96,30,"Lebensgro*es Lenkrad",0
+	defb 158,62
+	defb 100,148,"Voll f^hlbare R^ckwirkung",0
+	defb 174,98
+
+
+;=====================================================================
+
+key_lbl_b	defb 98,44,"Numeric keys",0
+	defb 152,80
+	defb 158,150,"Special function keys",0
+	defb 174,116
+
+key_lbl_f	defb 92,34,"Touches num]riques",0
+	defb 152,80
+	defb 118,150,"Touches de fonctions sp]ciales",0
+	defb 174,116
+
+key_lbl_g	defb 92,34,"Numerische Tasten",0
+	defb 152,80
+	defb 128,150,"Spezielle Funktionstasten",0
+	defb 174,116
+
+
+;=====================================================================
+
+joy_lbl_b	defb 98,30,"Well placed fire button",0
+	defb 152,44
+	defb 88,108,"Twist to rotate",0
+	defb 158,64
+
+joy_lbl_f	defb 98,30,"Bouton de tir judicieusement situ]",0
+	defb 152,44
+	defb 88,150,"Vers la droite et d'op]rer une rotation",0
+	defb 158,64
+
+joy_lbl_g	defb 98,30,"Praktisch angebrachter Schie*knopf",0
+	defb 152,44
+	defb 88,150,"Zum Rotierem drehen",0
+	defb 158,64
+

@@ -1,0 +1,1235 @@
+
+;---------------------------------------------------------------------
+;This routine is the LOW-LEVEL SEQUENCER, it controls:
+;
+;	1. Spinning of an object
+;	2. The printing of relevant text
+;	3. Stopping the spin at a required position
+;	4. Magnification of image by specified amount
+;	5. Replacing the vector image with a raster image
+;	6. Placing labels AND arrows (?)
+;	7. Waiting sufficinet time for labels to be read
+;
+;Higher level sequencers control which object is currently on view,
+;Which language text is to be used for documentation
+;
+;-------------------
+;
+;	<end_of_text (chr 0 reached)>
+;		|
+;		-----YES----
+;		|	SET spin_to
+;		NO
+;		==
+;
+;
+;	<spin_to SET> & <reached>
+;		|
+;		-----YES----
+;		|	SET raster_replace
+;		NO
+;		==
+;
+;
+;	<raster_rep SET>
+;		|
+;		-----YES----
+;		|	replace_raster_image
+;		NO		|
+;		==		|
+;				<FINISHED raster_replace>
+;				    |
+;				    -----YES----
+;				    |          SET label_mode
+;                                         NO
+;				   ==
+;
+;	<label_mode>
+;		|
+;		-----YES----
+;		|	<FINISHED labels>
+;		NO		|
+;		==		-----YES----
+;				|          PAUSE
+;				NO
+;				==
+;
+;
+;Data:
+;	pointer to correct language already set in MESSAGE_PTR
+;
+;
+;
+;	20 bit pointer to 3D coordinate info
+;	16 bit pointer to line connection information
+;	16 bit initial maginification factor
+;	8 bit partial line fruition speed
+;	8 bit halt value, so all shapes run at the same speed
+;	spin to X value (0-71)
+;	spin to Y value (0-71)
+;	8 bit final magnification value
+;	20 bit pointer to raster image ( a copy block  with coord)
+;	x coord for placement
+;	y coord for placement of raster image !
+;
+;	1 byte number of labels
+;
+;	3 word pointers to labels for each language
+;
+;
+;-------------------
+;
+;Doesn't return until above sequence finished !
+;
+
+sequencer	xor a
+	percentage	;zero line length
+	ld a,white
+	bright_pt	;colour of dot
+
+	ld a,true+re_display
+	ld (can_switch),a		;can switch, re-display text also
+
+
+;----------------------------------
+;Get 20 bit address of coord data !
+
+	ld hl,(SEQ_PTR)	;get 20 bit address of shape's 3D data
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	ld c,(hl)
+	inc hl
+	ld b,0
+
+	ld (source_l),de	;offset within 64K page
+	ld (source_h),bc	;page
+
+;-------------------
+
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl		;line connection pointer
+	ld (connexion),de
+
+;-------------------
+
+	ld e,(hl)
+	inc hl
+	ld d,(hl)	;initial magnification factor
+	inc hl
+	ld (enlarge),de
+
+;-------------------
+
+	ld a,(hl)
+	ld (part_speed),a		;set partial line speed
+	inc hl
+	ld a,(hl)
+	ld (halt_val),a		;halt value for sync
+	inc hl
+	ld (SEQ_PTR),hl	;save until later
+
+
+;---------------------
+;Normal spin and print
+
+	part_3d on	;START drawing partial lines
+
+seq_loop	ld a,(line_len)	;partial lines bit
+	ld hl,part_speed
+	add a,(hl)
+	jp p,$1
+	part_3d off	;turn partial lines OFF
+	jp $2
+
+$1	percentage	;set the parial line length
+$2	ld hl,dx	;do DX
+	ld b,(hl)
+	ld a,(x_speed)
+	add a,(hl)	;add X speed to DX
+	ld (hl),a
+
+	ld hl,dy	;now DY
+	ld c,(hl)
+	inc (hl)
+	inc (hl)
+
+	calc_3d	;set the DSP going on the vertices
+	draw_screen	;draw the screen meanwhile !
+	wait_3d	;wait for the DSP to finish
+	ld hl,(connexion)
+	call drw_3d
+
+	ld a,(halt_val)
+$10	and a
+	jr z,$11
+	halt
+	dec a
+	jr $10
+
+$11	call do_it_all
+
+	call hitch_prnt
+	and a
+	jp nz,seq_loop	;not finished text
+
+
+;-----------------------------
+;Spin to the required position
+
+	ld a,true
+	ld (can_switch),a	;can re choose language, BUT DO NOT re display
+	call spin_to	;the text !
+
+
+;-------------------
+;Magnify the image ?
+
+	ld hl,(SEQ_PTR)
+	ld e,(hl)
+	ld d,255	;destination size !
+	inc hl
+	ld (SEQ_PTR),hl
+
+	ld bc,-4	;shrink val
+	ld hl,(enlarge)
+	bit 7,h	;-ve or +ve
+	jr z,$4
+
+	and a
+	sbc hl,de	;which is largest ?
+	jr nc,$4
+	ld bc,4	;enlarge val
+
+;-------------------
+
+$4	ld hl,(enlarge)
+
+mag_it	and a
+	sbc hl,de
+	add hl,de
+	jr z,fin_mag	;source=dest ?
+
+	ld a,4	;SIMPLEST way of magnifying by 16
+$1	add hl,bc	;given that smallest step is +-4
+	and a
+	sbc hl,de	;test for finished
+	add hl,de	;ADD doesn't affect the ZERO flag
+	jr z,$5
+	dec a
+	jr nz,$1
+
+;-------------------
+
+$5	push hl
+	push de
+	push bc
+	scale_fac
+
+	ld a,(dx)
+	ld b,a
+	ld a,(dy)
+	ld c,a	;Use the new values in 3D
+
+	calc_3d	;set the DSP goin'
+	draw_screen	;draw the screen meanwhile !
+	wait_3d	;wait for the DSP to finish
+	ld hl,(connexion)
+	call drw_3d
+
+	ld a,(halt_val)
+$3	and a
+	jr z,$2
+	halt
+	dec a
+	jr nz,$3
+
+$2	call do_it_all
+
+	pop bc
+	pop de
+	pop hl
+	jr mag_it
+
+
+;-------------------
+
+fin_mag	permanent	;last image to REMAIN
+	draw_screen
+
+
+;--------------------------------------------------------------
+;Set up blitter proggy for raster replacement of vector image !
+
+	ld hl,(SEQ_PTR)
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	ld a,(hl)	;20 bit addr
+	inc hl
+	ld c,(hl)	;dest coords
+	inc hl
+	ld b,(hl)
+	inc hl
+	ld (SEQ_PTR),hl
+	ex de,hl		;get 20 bit address onto hla
+
+	ld (temp_1),hl
+	ld (temp_2),a		;save address	
+	ld (copy_coords),bc	;address of where to go
+	ld (BR_COPY+1),bc		;set dest coords in BR_COPY
+
+;-------------------
+
+	ld d,h	;page needed RAM bank in
+	sla d
+	rla
+	sla d
+	rla
+	ld (raster_page),a	;save it
+	out (BANK3),a
+	ld a,h
+	or 11000000b	;ensure hl is 49152 to 65535
+	ld h,a
+
+	inc hl
+	ld c,(hl)	;width
+	inc hl
+	ld b,(hl)	;height
+	inc hl
+	inc hl
+	ld d,(hl)
+	inc hl	;hl points to data, a=trans col
+
+	ld a,TOP_PAGE
+	out (BANK3),a	;page correct bank back in !
+
+	ld a,d
+	ld (BR_COPY+6),a	;set trans colour in BR_COPY
+	ld a,c
+	ld (BR_COPY+3),a	;set width of the COPY block !
+
+
+;----------------------------------------
+;Now replace vector with raster, slowwwly
+;
+;hl=point to data
+;bc=width, height
+;
+
+	xor a
+	ld (syncit),a	;for mouse movement ETC
+
+	push hl
+	call wait_20
+	pop hl
+
+	xor a		;size for copying !
+$2	inc a		;start from 1
+	push af
+	push hl
+	push bc
+	copy_some	;tell it to copy some of image
+
+	ld hl,(temp_1)
+	ld a,(temp_2)		;20 bit address
+	ld bc,(copy_coords)
+	copy
+
+
+;-------------------------------------------------------------
+;Chris' idea, a preceeding black line to cover up the graphics
+
+	ld a,(BR_COPY+2)	;y coord
+	ld b,a
+	ld d,a
+	ld c,w1_xs
+	ld e,w1_xs+w1_xz
+	ld a,black
+	cline
+
+;-------------------
+
+	pop bc
+	pop hl	;retrieve saved values
+	push bc
+	ld de,BR_COPY+7		;start of data
+
+$4	ld a,(raster_page)	;EXTREMELY sloooowww routine !
+	out (BANK3),a		;page other in
+	ld b,(hl)
+	inc hl
+
+	ld a,TOP_PAGE
+	out (BANK3),a		;proper RAM back in
+	ld a,(BR_COPY+6)		;get trans col
+	cp b			;is it transparent colour ?
+	jr z,$5		;YES it is
+	ld a,raster_col		;NO, so replace with bright colour
+
+$5	ld (de),a
+	inc de	;set it in the copy block
+	dec c
+	jr nz,$4	;loop for width times !
+	pop bc	;retrieve
+
+;-------------------
+
+	push hl
+	push bc
+
+	ld a,b
+	dec a
+	jr z,$3	;last one, so don't do the line
+
+	ld hl,BR_COPY
+	ld a,cpmpage	;20 bit address for copying !
+	copy
+
+;-------------------
+
+$3	permanent
+	draw_screen	;draw the actions performed
+	call do_any
+
+	ld hl,BR_COPY+2
+	inc (hl)	;where next line to go
+	pop bc
+	pop hl
+	pop af
+	djnz $2
+
+
+;----------------------------------------------------------
+;Place the labels, and delay !, before returning up a level
+
+	ld a,false
+	ld (can_switch),a
+	call wait_20
+
+label_it	ld a,0	;current window =0
+	current
+	ld a,arrow_col
+	set_link	;set the ink colour
+
+	ld hl,(SEQ_PTR)
+	ld a,(hl)	;number of labels
+	ld b,a
+	and a
+	jp z,lbl_dlay
+	inc hl	;hl points to coords of string
+
+;-------------------
+
+	ld a,(language)	;pick different labels depending upon language
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)	;de points to label structure
+	ex de,hl	;oh no it doesn't (a bit of festive spirit)
+
+;-------------------
+
+lbl_loop	push bc
+	ld c,(hl)	;X first
+	inc hl
+	ld b,(hl)	;Y
+	inc hl
+	hcursor	;set cursor pos
+
+	ld ix,(cur_base)	;SHOULDN'T do this, BUT
+
+	push bc
+	push hl
+	pstring
+	pop hl
+	pop bc	;save all
+
+try_ag	ld a,(hl)	;do the ARROW
+	inc hl
+	and a
+	jr z,fin_str
+	ld a,(hl)
+	inc hl
+	and a
+	jr z,fin_str	;test two chars in string for TERMINATOR
+	ld a,c
+	add a,(ix+W_CHARX)	;for every 2 chars in string move >
+	ld c,a
+	jr try_ag	;loop until end of string
+
+fin_str	ld e,(hl)	;get x and y end coords
+	inc hl
+	ld d,(hl)
+	inc hl
+
+	ld a,c
+	add a,(ix+W_TOPX)
+	ld c,a
+
+	dec b		;ASSUME arrow from above the text
+	ld a,d
+	sub b
+	ld a,b
+	jr c,no_bel
+
+	ld a,b
+	add a,2		;compensate for ASSUMPTION
+	add a,(ix+W_CHARY)
+
+no_bel	add a,(ix+W_TOPY)	;offset from window
+	ld b,a
+
+	push hl
+	line		;draw the line
+	permanent
+	draw_screen
+	pop hl
+
+	pop bc
+	djnz lbl_loop
+
+;-------------------
+
+lbl_dlay	ld b,100	;approx delay of 6 seconds
+$1	push bc
+	halt
+	halt
+	halt
+	call do_it_all
+	pop bc
+	djnz $1
+	jp fade_out
+
+
+;---------------------------------------------------------------------
+
+wait_20	push bc
+	ld b,7
+$1	push bc
+	halt
+	halt
+	halt
+	call do_it_all
+	pop bc
+	djnz $1
+	pop bc
+	ret
+
+
+;=====================================================================
+;Fade the screen out in some fashion or other
+
+fade_out	ld a,clr_white
+	set_link	all boxes use it ?
+	ld a,clr_white
+	set_pink
+
+	ld c,w1_xs
+	ld b,w1_ys
+	ld e,w1_xs+w1_xz
+	ld d,w1_ys+w1_yz
+
+$1	call do_a_box
+	ld h,0	;FLAG
+
+	ld a,c
+	sub e
+	cp 2
+	jr c,$2	;how close are the Xs
+	inc c
+	dec e
+	inc h		;increment flag
+
+$2	inc b
+	dec d
+
+	push hl
+	push de
+	push bc
+	draw_screen
+	call do_any	;keep the mouse goin'
+	pop bc
+	pop de
+	pop hl
+
+	ld a,h	;=0 then two lines approached each other
+	and a
+	jp nz,$1
+
+
+;Now explode and fade the pixels from the line generated
+;Firstly we generate a structure in a used area
+;(dsp_dest) and then move them for 16 cycles, fading x1
+;each time
+;
+;Structure:
+;	X pos
+;	X add
+;	Y pos
+;	Y add	
+
+	ld hl,dsp_dest	;not used now, so re-use it
+	ld a,b
+	sub d		;number of points to operate on
+	ld b,a
+	push bc	;store for later
+
+$3	ld (hl),e
+	inc hl
+	push bc
+	random
+	pop bc
+	and 7
+	sub 4
+	ld (hl),a	;random direction: -4 to +3
+	inc hl
+
+	ld (hl),d
+	inc hl
+	push bc
+	random
+	ld a,b
+	and 3
+	ld b,a
+	ld a,c
+	and 3
+	add a,b	;a=0 -> 6
+	sub 3
+	ld (hl),a	;random direction: -3 to +3
+
+	inc hl
+	pop bc
+	inc d
+	djnz $3
+
+
+;-------------------
+
+	pop bc
+	ld c,16	;16 grey scales on final machine
+$4	push bc
+	ld hl,dsp_dest
+$5	push bc
+	ld a,(hl)
+	inc hl
+	add a,(hl)	;X <- x + xdir
+	dec hl
+	ld (hl),a
+	ld c,a
+
+	inc hl
+	inc hl
+	ld a,(hl)
+	inc hl
+	add a,(hl)	;Y <- y + ydir
+	dec hl
+	ld (hl),a
+	ld b,a
+	plot
+	inc hl
+	inc hl
+
+	pop bc
+	djnz $5
+
+;-------------------
+
+	draw_screen
+	pop bc
+	push bc	;C-1 = grey scale ?
+	dec c
+
+	ld a,clr_white
+	out (PALAW),a
+	ld a,c
+	call send_sign
+	ld a,c
+	call send_sign
+	ld a,c
+	call send_sign
+	call do_any	;keep flags goin'
+	pop bc
+	dec c
+	jr nz,$4
+	ret
+
+
+;========================================================
+;Draws a box in the current line colour (set by set_link)
+;B,C,D and E are various coords on entry,
+;and same on return
+
+do_a_box	push bc
+	push de
+	ld d,b
+	line
+
+	pop de
+	pop bc
+	push bc
+	push de
+	ld c,e
+	line
+
+	pop bc	;swap them here
+	pop de
+	push de
+	push bc
+	ld d,b
+	line
+
+	pop bc	;still swapped
+	pop de
+	push de
+	push bc
+	ld c,e
+	line
+
+	pop de	;swap back again
+	pop bc	;all 4 rectangle lines
+	ret
+	ret
+
+
+;=====================================================================
+;Spin to the required final position, by first spinning DY to final
+;pos, followed by DX.
+
+spin_to	ld hl,(SEQ_PTR)	;info pointer
+	ld c,(hl)
+	inc hl
+	push bc
+
+;-------------------
+
+	ld a,(dy)
+	sub (hl)
+	neg		;Fin - current
+	srl a
+	inc hl
+	ld (SEQ_PTR),hl
+
+$1	push af	;Force a slow down IF acclerating
+	inc a
+	add a,a	;a=2 + 2 * original
+	ld hl,x_speed
+	cp (hl)
+	jr nc,$2	;choose the slower of the 2
+	ld (hl),a
+
+$2	ld a,(hl)	;for adding to X speed
+	ld hl,dx
+	ld b,(hl)
+	add a,(hl)
+	ld (hl),a	;x_speed += accel
+
+	ld hl,dy
+	ld c,(hl)
+	inc (hl)
+	inc (hl)	;continue Y rotations
+
+	calc_3d	;set the DSP goin'
+	draw_screen	;draw the screen meanwhile !
+	wait_3d	;wait for the DSP to finish
+	ld hl,(connexion)
+	call drw_3d
+
+	ld a,(halt_val)
+$3	and a
+	jr z,$4
+	halt
+	dec a
+	jr $3
+
+$4	call do_it_all
+	pop af
+	dec a
+	jp nz,$1
+
+
+;-------------------
+
+	pop bc	;saved earlier
+	ld a,(dx)
+	sub c
+	neg
+	srl a
+
+$5	push af
+	ld hl,dx
+	ld b,(hl)	;acceleration was fixed to 2 by Y slow down
+	inc (hl)
+	inc (hl)	;so just use 2 now !
+
+	ld a,(dy)
+	ld c,a
+
+	calc_3d	;set the DSP goin'
+	draw_screen	;draw the screen meanwhile !
+	wait_3d	;wait for the DSP to finish
+	ld hl,(connexion)
+	call drw_3d
+
+	ld a,(halt_val)
+$6	and a
+	jr z,$7
+	halt
+	dec a
+	jr $6
+
+$7	call do_it_all
+	pop af
+	dec a
+	jp nz,$5
+	ret
+
+
+;=====================================================================
+;Prints characters ! Prints a character followed by the cursor. The
+;next time around the character is DE-highlighted, and another char
+;printed at the next position along. If the text overflows (out of
+;bottom of window), then this routine scrolls the window INSTEAD of
+;printing.
+;
+;IN: nowt, all registers destroyed. RETURNED: true if END reached
+;    false otherwise. (end being of that block).
+;
+
+hitch_prnt	ld a,(scroll_f)	;scrolling ?
+	and a
+	jp z,no_scrln
+	dec a
+	ld (scroll_f),a	;decrement the counter
+
+	ld hl,filler_s-ORG_DATA
+	ld a,8		;data for filling with !
+	scroll	;scroll the window up one pixel
+	ld a,true	;return NOT FINSISHED
+	ret
+
+
+;-------------------
+
+no_scrln	ld bc,(last_coords)
+	hcursor
+	ld a,(last_char)	;what was last char ?
+	and a
+	jp z,no_darka	;don't fade if zero
+
+;-------------------
+
+	ld hl,font_1	;changing the FONT does the colours
+	font
+	ld a,(last_char)
+	ld c,a
+	pchar		;print the character in darker colour
+
+;-------------------
+
+no_darka	get_coords
+	ld (last_coords),bc
+
+	ld hl,font_2
+	font			;font for bright colours
+
+	ld hl,(message_ptr)	;get address of next char
+	ld a,(hl)
+	ld (last_char),a
+	inc hl
+	ld (message_ptr),hl
+	dec hl		;back to current char
+
+	ld c,a
+	pchar		;print the character (used to be WORD_FIT)
+	ld a,(last_char)	;return TRUE (<>0) or false for FINISHED ?
+	ret
+
+
+;---------------------------------------------------------------------
+;Routine which given a table of start and end points (and a counter)
+;moves the KONIX logo on a line between the two points !
+;
+;IN: hl=pointer to start/end table (consists of start x,y - end x,y)
+;
+
+k_explode	xor a
+	ld (approx),a	;set position in line to zero
+
+k_linelo	cp 64
+	jr nz,$1
+	call explode_l	;right channel explosion
+
+$1	draw_screen
+
+	ld hl,ptable	;where start/end points are contained
+	ld de,the_bits	;get table containing piece info !
+
+	ld b,18	;for the number of pieces
+splo_1	push bc
+	push de	;for later
+
+	ld d,(hl)	;start X into 'd'
+	inc hl
+	ld a,(hl)	;start Y into 'l'
+	inc hl
+	ld c,(hl)	;finish X into 'c'
+	inc hl
+	ld e,(hl)	;finish Y into 'e'
+	inc hl
+	push hl	;save it
+	ld l,a
+
+	ld a,(approx)	;the counter
+	ld h,a
+
+	ld b,6	;2 ^6= 64 (resolution of the movement)
+bindiv	rl h		;get the bit from bit 7
+	jp nc,reduce
+	ld a,d	;move start points UP
+	add a,c
+	rra
+	ld d,a
+	ld a,l
+	add a,e
+	rra
+	ld l,a
+	djnz bindiv
+	jp out_bin
+
+reduce	ld a,d	;move end points DOWN !
+	add a,c
+	rra
+	ld c,a
+	ld a,l
+	add a,e
+	rra
+	ld e,a
+	djnz bindiv
+
+out_bin	ld b,e	;end coords are in c and b NOW
+	pop de	;old hl
+	pop hl	;de=which bloody block !
+	push de	;save again
+
+	ld e,(hl)	;get the info on which piece  ie. address
+	inc hl
+	ld d,(hl)
+	inc hl
+	push hl
+
+	ex de,hl
+	ld a,8	;data at 1/2 MEG
+	copy
+
+	pop de	;address of blocks !
+	pop hl	;line table
+	pop bc
+	djnz splo_1	;for all the pieces
+
+	ld hl,approx	;move along the lines
+	ld a,4	;add resolution of line to current count
+	add a,(hl)
+	ld (hl),a
+	jp nz,k_linelo	;loop around until finished !
+	ret
+
+
+;--------------------------------------------
+;Dummy print error handler, for windows 1,2,4
+
+dummy_err	ret
+
+
+;-------------------------------
+;REAL error handler for window 3
+
+err_w1	ld a,(error_mode)
+	and a
+	jp nz,hitch_md
+
+	ld b,44
+$1	halt
+	djnz $1	;a delay so it can be read !
+
+	ld ix,(cur_base)
+	ld b,(ix+W_CHARY)
+$2	push bc
+	halt
+
+	ld hl,filler_s-ORG_DATA
+	ld a,8		;fill data for scroll
+	scroll
+	pop bc
+	djnz $2
+	ret
+
+
+;===================
+
+hitch_md	dec a
+	jr nz,hitch_2
+
+	ld a,temp_hitch
+	ld (error_mode),a
+
+	ld a,(last_char)
+	and a
+	ret z
+	ld bc,(last_coords)
+	hcursor
+
+	ld hl,font_1	;changing the FONT does the colours
+	font
+	ld a,(last_char)
+	ld c,a
+	pchar		;print the character in darker colour
+	ret
+
+
+;===================
+
+hitch_2	ld a,hitch_mode
+	ld (error_mode),a
+
+	ld ix,(cur_base)	;get current window base NAUGHTY !!!!
+	ld a,(ix+W_CHARY)	;get character height
+	ld (scroll_f),a	;set scroll count to this
+
+	ld bc,(last_coords)
+	sub b
+	neg
+	ld b,a
+	ld (last_coords),bc
+	ret
+
+
+;=====================================================================
+;Include the Jons DSP program and data, written in a separate file.
+;The only label which should be referenced from this file is:
+;
+;	dsp_chunk
+;
+;The address for dsp_run which hl contains should be : DSP_progst
+;
+
+	include \pds\work\hitch\3d_dsp.inc
+
+
+;---------------------------------------------------------------------
+;Data for the windows involved in this program
+
+
+wind_f1	defb w1_xs,w1_ys	;topx, topy      ------------------------
+	defb w1_xz,w1_yz	;sizes           | 4  |                 |
+	defb black,black	;paper, ink      |----|           1     |
+	defw dummy_err	;                |2(5)|                 |
+			;	       |----------------------|
+wind_f2	defb w2_xs,w2_ys	;as above        |           3          |
+	defb w2_xz,w2_yz	;                ------------------------
+	defb black,black
+	defw dummy_err
+
+wind_f3	defb w3_xs,w3_ys+w6_ht	;as above
+	defb w3_xz,w3_yz-w6_ht
+	defb black,black
+	defw err_w1
+
+wind_f4	defb w4_xs,w4_ys	;as above
+	defb w4_xz,w4_yz
+	defb black,black
+	defw dummy_err
+
+w5_yoff	equ 17
+w5_ysize	equ 25
+
+wind_f5	defb w2_xs,w2_ys+w5_yoff
+	defb w2_xz,w5_ysize
+	defb black,black
+	defw dummy_err
+
+w6_ht	equ 19	;font Y + 6 pixels
+w6_xoff	equ 72-3	;max 28 chars in object title
+
+wind_f6	defb w3_xs+w6_xoff,w3_ys
+	defb 256-w6_xoff-w6_xoff,w6_ht
+	defb black,black
+	defw dummy_err
+
+
+;-------------------
+
+b_titl	defb "ENGLISH",0	;title for British flag (chr 0 ends message !)
+g_titl	defb "DEUTSCH",0	;title for German flag
+f_titl	defb "FRANCAIS",0	;title for French flag
+
+
+;-------------------
+
+lin_borda	defb w4_xs-2,w4_ys-2,w4_xs+w4_xz+1,w4_ys-2
+	defb w4_xs+w4_xz+1,w4_ys-2,w4_xs+w4_xz+1,w4_ys+w4_yz+1
+	defb w4_xs+w4_xz+1,w4_ys+w4_yz+1,w4_xs-2,w4_ys+w4_yz+1
+	defb w4_xs-2,w4_ys+w4_yz+1,w4_xs-2,w4_ys-2
+
+	defb w3_xs-2,w3_ys-2,w3_xs+w3_xz+1,w3_ys-2
+	defb w3_xs+w3_xz+1,w3_ys-2,w3_xs+w3_xz+1,w3_ys+w3_yz+1
+	defb w3_xs+w3_xz+1,w3_ys+w3_yz+1,w3_xs-2,w3_ys+w3_yz+1
+	defb w3_xs-2,w3_ys+w3_yz+1,w3_xs-2,w3_ys-2
+
+	defb w2_xs-2,w2_ys-2,w2_xs+w2_xz+1,w2_ys-2
+	defb w2_xs+w2_xz+1,w2_ys-2,w2_xs+w2_xz+1,w2_ys+w2_yz+1
+	defb w2_xs+w2_xz+1,w2_ys+w2_yz+1,w2_xs-2,w2_ys+w2_yz+1
+	defb w2_xs-2,w2_ys+w2_yz+1,w2_xs-2,w2_ys-2
+
+
+;-------------------
+
+the_bits	defw red_k1-ORG_DATA	;the bits which make up the image
+	defw white_k2-ORG_DATA
+	defw red_k3-ORG_DATA
+	defw white_k4-ORG_DATA	; 'K'
+
+	defw red_k3-ORG_DATA
+	defw white_k4-ORG_DATA
+	defw red_k4-ORG_DATA
+	defw white_k3-ORG_DATA	; 'O'
+
+	defw red_k2-ORG_DATA
+	defw white_k2-ORG_DATA
+	defw red_n1-ORG_DATA
+	defw white_k2-ORG_DATA	; 'N'
+
+	defw red_k2-ORG_DATA
+	defw white_k2-ORG_DATA	; 'I'
+
+	defw red_k4-ORG_DATA
+	defw white_k3-ORG_DATA
+	defw red_k3-ORG_DATA
+	defw white_k4-ORG_DATA	; 'X'
+
+;-------------------
+
+ptstart	defb st_konix,st_koniy	;start coords of the bits ! (K1)
+	defb st_konix,st_koniy	;K2
+	defb st_konix,st_koniy+12	;K3
+	defb st_konix+4,st_koniy	;K4 of 'K'
+	defb st_konix+3,st_koniy+12	;K3
+	defb st_konix+7,st_koniy	;K4
+	defb st_konix,st_koniy+12	;K4
+	defb st_konix+5,st_koniy	;K3	of 'O'
+	defb st_konix+16,st_koniy+12	;K2
+	defb st_konix+9,st_koniy	;K2
+	defb st_konix+2,st_koniy+12	;N1
+	defb st_konix+23,st_koniy	;K2 of 'N'
+	defb st_konix+23,st_koniy+12	;K2
+	defb st_konix+16,st_koniy	;K2 of 'I'
+	defb st_konix+3,st_koniy+12	;K4
+	defb st_konix,st_koniy	;K3
+	defb st_konix+6,st_koniy+12	;K3
+	defb st_konix+1,st_koniy	;K4 of 'X'
+
+;-------------------
+
+dest_pts	defb en_konix,en_koniy	;resting position of pieces: (K1)
+	defb en_konix,en_koniy+26	;K2
+	defb en_konix+9,en_koniy+12	;K3
+	defb en_konix+9,en_koniy+26	;K4 of 'K'
+	defb en_konix+32,en_koniy+12	;K3
+	defb en_konix+32,en_koniy+26	;K4
+	defb en_konix+55,en_koniy+12	;K4
+	defb en_konix+55,en_koniy+26	;K3	of 'O'
+	defb en_konix+81,en_koniy+12	;K2
+	defb en_konix+81,en_koniy+26	;K2
+	defb en_konix+90,en_koniy+12	;N1
+	defb en_konix+104,en_koniy+26	;K2 of 'N'
+	defb en_konix+116,en_koniy+12	;K2
+	defb en_konix+116,en_koniy+26	;K2 of 'I'
+	defb en_konix+128,en_koniy+12	;K4
+	defb en_konix+128,en_koniy+26	;K3
+	defb en_konix+151,en_koniy+12	;K3
+	defb en_konix+151,en_koniy+26	;K4 of 'X'
+
+;-------------------
+
+welcome1	defb 13,13,13
+	defb "             Welcome to the Konix Multi-System",13,13
+	defb "   Use the hand icon to select the language of your choice",13
+	defb "Press the fire button with  the hands on the  arrows to select"
+	defb "     the component of the Konix Multi System for display",13,13,13
+	defb 13,13
+
+
+	defb "           Bienvenue $ bord du Multi-Syst\me Konix",13,13
+	defb "Uiliser la  main sur  l']cran pour  s]lectionner la  langue de"
+	defb "                         ton choix",13,13
+	defb "Pour  s]lectionner   un  composant  du   Multi-Syst\me  Konix,"
+	defb "appuyer sur le bouton de  tir lorsque la main (sur l']cran) se"
+	defb "                    trouve sur une fl\che",13,13,13
+
+
+	defb "             Willkommen zum Konix Multi-System",13,13
+	defb "         Zur Wahl der Sprache die Handikone verwenden",13
+	defb "Um einen Teil des  Konix Multi-Systems zu w@hlen,  mu* man den"
+	defb "Schie*knopf dr^cken, wenn die  Handikone ^der einem Pfeil ist."
+	defb 13,13,13
+
+
+	defb "        Concept and programming: 'Attention To Detail'",13
+	defb 0
+
+
+;---------------------------------------------------------------------
+; Include the other files for assembly now.
+
+font_1	incbin \pds\work\hitch\font_1.fnt	    ;character set !
+font_2	incbin \pds\work\hitch\font_2.fnt     ;anudda one
+
+	include \pds\work\include\low_a.z80
+	include \pds\work\include\low_b.z80
+
+	include \pds\work\hitch\3d.z80    ;Jons 3d routines.
+	include \pds\work\hitch\ddrive.h
+	include \pds\work\hitch\keypad.h
+	include \pds\work\hitch\joyheli.h
+	include \pds\work\hitch\chair.h
+	include \pds\work\hitch\lightgun.h
+	include \pds\work\hitch\slip1.h
+	include \pds\work\hitch\slip2.h
+	include \pds\work\hitch\slip3.h
+
+std_pal	incbin \pds\work\hitch\hh.rgb
+
+;-------------------
+
+	include \pds\work\hitch\sample.z80
+	include \pds\work\hitch\samp_dsp.inc
+
+
+	FREE $
+
+;---------------------------------------------------------------------
+;Set bank to 19, ie. the normal (EPROM) bank for 49152-65535 inclusive
+;Unfortunately PDS has a bug ! Hence the need for the org and nop
+;which follow the bank command..
+;
+;The 'bank 19' command ensures that the Z80 code is placed into RAM
+;with the correct page in the Z80 address space.
+;
+;	Aarghh  B A S T A R D S....
+;
+
+	bank TOP_PAGE	;BUGFIX see above
+
+	org 65535
+	nop
+
+
+	end		;STOP assembly after this file....
+

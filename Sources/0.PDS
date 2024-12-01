@@ -1,0 +1,1114 @@
+
+
+;---------------------------------------------------------------------
+;Include files which contain definitions for use by the user
+;
+;The first label BLITNUM is set by the user to define how many blit
+;blocks there will be (MAX) in a blitter list. Used in DEFS.INC
+;
+;
+;LAST revision for 200 line display
+;
+
+SWAPPING	equ 0		;NOT screen swapping here
+
+
+;-------------------
+
+BLITNUM	equ 350	;current limit
+MAX_VERTICES equ 224	;max number of vertices on any object
+
+
+	include \pds\work\include\defs.inc				;general defs include file
+	include \pds\work\include\low_inc.inc	;LOW level rotuine MACROs
+	include \pds\work\include\dsp_ass.inc	;DSP assembler MACROs
+
+	include \pds\work\hitch\macros3d.inc    ;Jons 3D macros
+
+
+SCRN_X	equ 256	;screen size !
+SCRN_Y	equ 256
+
+SCRN_200	equ 28
+
+ln_1xs	equ 0		;four windows can be described by 3 intersecting
+ln_1ys	equ 90+SCRN_200	;lines (and the edge of the screen)
+ln_1xt	equ 86	;the following defines are those lines
+ln_1yt	equ 90+SCRN_200
+
+ln_2xs	equ 86
+ln_2ys	equ SCRN_200
+ln_2xt	equ 86
+ln_2yt	equ 166
+
+ln_3xs	equ 0
+ln_3ys	equ 166
+ln_3xt	equ 255
+ln_3yt	equ 166
+
+w1_xs	equ ln_1xt+3		;window definitions in terms of those
+w1_ys	equ 3+SCRN_200		;three lines. Allow easy changing of
+w1_xz	equ SCRN_X-w1_xs-3	;the windows etc.
+w1_yz	equ ln_3ys-w1_ys-2
+
+w2_xs	equ 3
+w2_ys	equ ln_1ys+3
+w2_xz	equ ln_2xs-w2_xs-2
+w2_yz	equ ln_3ys-ln_1ys-5
+
+w3_xs	equ 3
+w3_ys	equ ln_3ys+3
+w3_xz	equ SCRN_X-w3_xs-3
+w3_yz	equ SCRN_Y-w3_ys-3-SCRN_200
+
+w4_xs	equ 3
+w4_ys	equ 3+SCRN_200
+w4_xz	equ ln_2xs-w4_xs-2
+w4_yz	equ ln_1ys-w4_ys-2
+
+;-------------------
+
+b_flagx	equ w4_xs+1	;flag positions relative to window !
+b_flagy	equ w4_ys+3
+f_flagx	equ b_flagx
+f_flagy	equ b_flagy+28
+g_flagx	equ b_flagx
+g_flagy	equ f_flagy+28
+x_off	equ 36	;offsets of text from the flags
+y_off	equ 22
+
+;-------------------
+
+logo_x	equ w1_xs+(w1_xz-88)/2
+logo_y	equ w1_ys+40
+
+;-------------------
+
+hand_x	equ 13
+hand_y	equ 14	;hand dimensions
+
+normal_h	equ 0		;hand modes. normal select
+scroll_t	equ 1		;scrolling window 5 text
+print_t	equ 2		;printing window 5 text
+
+max_hx	equ w1_xs-hand_x
+max_hy	equ w3_ys-hand_y-10
+min_hx	equ w4_xs
+min_hy	equ w4_ys	;active mouse area
+
+;-------------------
+
+flag_h	equ 24
+flag_w	equ 30
+arro_h	equ 10
+arro_w	equ 9		;various dims
+
+arro1_x	equ w2_xs+2
+arro2_x	equ w2_xs+2+arro_w+2
+arro_y	equ w2_ys+4
+
+re_display	equ 128	;indicates whether text can be changed mid item
+
+;-------------------
+
+box_xs	equ 10		;colour box size !
+box_ys	equ 14
+
+bounce_minx equ w1_xs
+bounce_miny equ w1_ys
+bounce_maxx equ w1_xs+w1_xz-box_xs
+bounce_maxy equ w1_ys+w1_yz-box_xs-4
+
+;-------------------
+
+english	equ 0
+french	equ 1
+german	equ 2		;language numbers ?
+
+
+;---------------------------------------------------------------------
+;Colour map:
+;
+;	0 black		16
+;	1 red (konix)		17
+;	2 blue (flags)		18
+;	3 german red		19
+;	4 german yellow		20
+;	5 window border colour	21
+;	6 grey		22
+;	7			23
+;	8 3D lines colour		24
+;	9			25
+;	10			26
+;	11			27
+;	12			28 arrow colour
+;	13			29
+;	14			30 white for clearing screen with
+;	15			31 white
+;
+
+k_red	equ 1		;KONIX red ?
+k_white	equ 31	;KONIX white !
+borda_c	equ 5		;window border colour
+
+arrow_col	equ 28	;colour of the annotation arrows
+raster_col	equ k_white	;colour of preceeding raster line
+
+lite_col	equ 16 	;bright yellow !
+dark_col	equ 17	;darker yellow
+clr_white	equ 30
+shape_ink	equ 8
+
+;-------------------
+
+st_konix	equ (SCRN_X/2)-16		;start position of BLOCK ! (32 wide !)
+st_koniy	equ (SCRN_Y/2)-12		;24*36 block SO CENTRE it !
+en_konix	equ (SCRN_X/2)-87		;Hmmm, centre <> ?
+en_koniy	equ SCRN_Y-80		;centre it in W1 (expected 38 pixels)
+
+;-------------------
+
+temp_hitch	equ 2
+hitch_mode	equ 1		;mode of window 3s error routine (Slowww scroll !)
+text_mode	equ 0		;alternatively FAST scroll
+
+accel_num	equ 10
+shrink_num	equ 15	;number of shrinks/accels performed
+
+;-------------------
+
+flicker_free equ 33+w1_yz+SCRN_200	;where interrput to go
+
+;-------------------
+
+data_ptr	equ 0		;flags indicating what pointers in the
+routine_ptr equ 1	;high level data point to
+num_actions equ 10	;number of sections in the demo
+
+
+;---------------------------------------------------------------------
+;Place the data in the correct banks NOW  NOW  NOW  NOW
+;
+;This is done before the program is assembled because, well why not.
+;No, sorry, its their bloody BANK command. Doin' the data first
+;simplifies the structure of this file.
+;
+	org ORG_DATA	;where the page is paged into. A MUST
+
+
+;The 3 flags !
+
+british_f	incbin \pds\work\hitch\ukfl.f1        ;NOT sprite format anymore
+french_f	incbin \pds\work\hitch\frenchfl.f1
+german_f	incbin \pds\work\hitch\germanfl.f1
+
+
+flag_f	equ french_f-ORG_DATA
+flag_g	equ german_f-ORG_DATA
+flag_b	equ british_f-ORG_DATA
+
+
+;-------------------
+
+red_k1	defb b_img_b	;type of image
+	defb 9,24	;width, height
+	defb 2,black	;num cols + transparent
+	defs 9*24,k_red
+
+
+red_k2	defb b_img_b	;type
+	defb 9,12	;width, height
+	defb 2,black	;num cols, transparent
+	defs 9*12,k_red
+
+
+red_k3	defb b_img_b	;type
+	defb 23,12	;width, height
+	defb 2,black	;num cols, transparent
+
+	defs 11,black
+	defs 12,k_red	;1
+	defs 10,black
+	defs 12,k_red	;2
+	defs 10,black
+	defs 12,k_red	;3
+	defs 10,black
+	defs 12,k_red	;4
+	defs 10,black
+	defs 12,k_red	;5
+	defs 10,black
+	defs 12,k_red	;6
+	defs 10,black
+	defs 12,k_red	;7
+	defs 10,black
+	defs 12,k_red	;8
+	defs 10,black
+	defs 12,k_red	;9
+	defs 10,black
+	defs 12,k_red	;10
+	defs 10,black
+	defs 12,k_red	;11
+	defs 10,black
+	defs 12,k_red	;12
+	defs 11,black
+
+
+red_k4	defb b_img_b	;type
+	defb 23,12	;width, height
+	defb 2,black	;num cols, transparent
+
+	defs 12,k_red	;1
+	defs 12,black
+	defs 12,k_red	;2
+	defs 12,black
+	defs 12,k_red	;3
+	defs 12,black
+	defs 12,k_red	;4
+	defs 12,black
+	defs 12,k_red	;5
+	defs 12,black
+	defs 12,k_red	;6
+	defs 12,black
+	defs 12,k_red	;7
+	defs 12,black
+	defs 12,k_red	;8
+	defs 12,black
+	defs 12,k_red	;9
+	defs 12,black
+	defs 12,k_red	;10
+	defs 12,black
+	defs 12,k_red	;11
+	defs 12,black
+	defs 12,k_red	;12
+
+
+red_n1	defb b_img_b	;type
+	defb 23,12	;width, height
+	defb 2,black	;num cols, transparent
+
+	defs 11,black
+	defs 4,k_red	;1
+	defs 18,black
+	defs 7,k_red	;2
+	defs 15,black
+	defs 10,k_red	;3
+	defs 12,black
+	defs 12,k_red	;4
+	defs 10,black
+	defs 14,k_red	;5
+	defs 8,black
+	defs 15,k_red	;6
+	defs 7,black
+	defs 17,k_red	;7
+	defs 5,black
+	defs 18,k_red	;8
+	defs 4,black
+	defs 20,k_red	;9
+	defs 2,black
+	defs 21,k_red	;10
+	defs 1,black
+	defs 45,k_red	;11 & 12
+
+
+;-------------------
+
+white_k2	defb b_img_b	;type
+	defb 9,12	;width, height
+	defb 2,black	;num cols, transparent
+	defs 9*12,k_white
+
+
+white_k3	defb b_img_b	;type
+	defb 23,12	;width, height
+	defb 2,black	;num cols, transparent
+
+	defs 11,black
+	defs 12,k_white	;1
+	defs 10,black
+	defs 12,k_white	;2
+	defs 10,black
+	defs 12,k_white	;3
+	defs 10,black
+	defs 12,k_white	;4
+	defs 10,black
+	defs 12,k_white	;5
+	defs 10,black
+	defs 12,k_white	;6
+	defs 10,black
+	defs 12,k_white	;7
+	defs 10,black
+	defs 12,k_white	;8
+	defs 10,black
+	defs 12,k_white	;9
+	defs 10,black
+	defs 12,k_white	;10
+	defs 10,black
+	defs 12,k_white	;11
+	defs 10,black
+	defs 12,k_white	;12
+	defs 11,black
+
+
+white_k4	defb b_img_b	;type
+	defb 23,12	;width, height
+	defb 2,black	;num cols, transparent
+
+	defs 12,k_white	;1
+	defs 12,black
+	defs 12,k_white	;2
+	defs 12,black
+	defs 12,k_white	;3
+	defs 12,black
+	defs 12,k_white	;4
+	defs 12,black
+	defs 12,k_white	;5
+	defs 12,black
+	defs 12,k_white	;6
+	defs 12,black
+	defs 12,k_white	;7
+	defs 12,black
+	defs 12,k_white	;8
+	defs 12,black
+	defs 12,k_white	;9
+	defs 12,black
+	defs 12,k_white	;10
+	defs 12,black
+	defs 12,k_white	;11
+	defs 12,black
+	defs 12,k_white	;12
+
+;-------------------
+
+up_a	incbin \pds\work\hitch\arrup.f1
+down_a	incbin \pds\work\hitch\arrdown.f1
+h_def	incbin \pds\work\hitch\hand.f1
+
+
+up_arro	equ up_a-ORG_DATA
+down_arro	equ down_a-ORG_DATA
+hand_def	equ h_def-ORG_DATA
+
+
+;-------------------
+
+filler_s	defs 250,0	;scroll fill data (=0 =black !)
+
+	bank 32	;place it at 1/2 Meg (80000h)
+
+
+;-------------------
+
+	org ORG_DATA
+ddriv	incbin \pds\work\hitch\disk.f1
+weel	incbin \pds\work\hitch\slip1.f1
+	bank 33
+
+	org ORG_DATA
+hjoy	incbin \pds\work\hitch\helijoy.f1
+lgun	incbin \pds\work\hitch\lightgun.f1
+	bank 34
+
+	org ORG_DATA
+kpad	incbin \pds\work\hitch\keypad.f1
+	bank 35
+
+	org ORG_DATA
+dchair	incbin \pds\work\hitch\chair.f1
+	bank 36
+
+	org ORG_DATA
+plne	incbin \pds\work\hitch\slip2.f1
+bke	incbin \pds\work\hitch\slip3.f1
+	bank 37
+
+	org ORG_DATA
+log1	incbin \pds\work\hitch\logo1.f1
+log2	incbin \pds\work\hitch\logo2.f1
+	bank 38
+
+	org ORG_DATA
+bang_s	incbin \pds\work\hitch\explode.smp
+	bank 39
+
+bang_lo	equ bang_s-ORG_DATA+49152
+bang_hi	equ 39/4
+bang_len	equ 11718/2
+
+
+;-------------------
+
+d_drive	equ ddriv-ORG_DATA+16384
+wheel	equ weel-ORG_DATA+16384
+h_joy	equ hjoy-ORG_DATA+32768
+lite_gun	equ lgun-ORG_DATA+32768
+k_pad	equ kpad-ORG_DATA+49152
+d_chair	equ dchair-ORG_DATA
+bike	equ bke-ORG_DATA+16384
+plane	equ plne-ORG_DATA+16384
+logo1	equ log1-ORG_DATA+32768
+logo2	equ log2-ORG_DATA+32768
+
+
+;---------------------------------------------------------------------
+;Defines for use in this program
+;The users variable space follows on from the low-level routine space,
+;and variables should be entered as follows:
+;
+;	USER_VAR <variable name>,size
+;
+;All variables should be entered before the IF statement, because a
+;check is made using this statement, to see if the memory limit is
+;being exceeded.
+;
+
+;User definitions go here
+
+	USER_VAR approx,BYTE	;used in exploding the KONIX logo
+	USER_VAR ptable,18*4	;start & end points !
+	USER_VAR scroll_f,BYTE	;is window 3 scrolling OR printing
+	USER_VAR last_coords,WORD	;last coords printed
+	USER_VAR message_ptr,WORD	;pointer into message being printed
+	USER_VAR error_mode,BYTE	;window 3 error routine mode !
+
+;Jons
+
+	USER_VAR dx,BYTE		;current x rotation
+	USER_VAR dy,BYTE		;current y rotation
+
+	USER_VAR seq_ptr,WORD	;pointer to LOW seuqncer info
+
+	USER_VAR br_copy,w1_xz	;bright point copy block
+	USER_VAR temp_1,WORD	;word temp
+	USER_VAR temp_2,BYTE	;byte temp
+	USER_VAR copy_coords,WORD	;addr of where raster image to go
+	USER_VAR raster_page,BYTE	;which page raster image in
+
+;-------------------
+
+	IF (var_pc&1)
+	USER_VAR nobby,BYTE
+	ENDIF			;ensure dsp_src on WORD address
+	
+	USER_VAR dsp_src,8*WORD	      ;sin, cos, enlarge etc
+	USER_VAR dsp_dest,MAX_VERTICES*6  ;destination for x,y coords
+	USER_VAR dsp_fin,WORD	      ;flag indicating DSP finished
+
+
+ball_1	equ dsp_dest	;re-use old vars
+ball_2	equ dsp_dest+5
+fade_col	equ dsp_dest+10
+fade_dir	equ dsp_dest+11
+
+dr1	equ dsp_dest+12	;dR, dG, dB values for first
+count1	equ dsp_dest+15
+red1	equ dsp_dest+16	;actual RGB values
+dr2	equ dsp_dest+19	;dR, dG, dB values for second
+count2	equ dsp_dest+22
+red2	equ dsp_dest+23	;again
+
+color_cnt	equ dsp_dest+26	;colour counter
+
+;-------------------
+
+	USER_VAR connexion,WORD	;pointer to line connection info
+	USER_VAR part_speed,BYTE	;partial line speed for shapes
+	USER_VAR halt_val,BYTE	;halts so all shapes at same speed
+	USER_VAR x_speed,BYTE	;speed of rotat in x dir
+
+;-------------------
+
+	USER_VAR language,BYTE	;which language is in use
+	USER_VAR which_bit,BYTE	;pointer to shapes data etc
+	USER_VAR next_bit,BYTE	;next item for show
+	USER_VAR f_frame,BYTE	;flag frame currently in wotsit
+	USER_VAR flag_blit,BLITSIZE	;flag blit blit
+
+;-------------------
+
+	USER_VAR white_rgb,3*BYTE	;palette value stores
+	USER_VAR red_rgb,3*BYTE	;same again
+
+color1_rgb	equ white_rgb
+
+;-------------------
+
+	USER_VAR shrink_f,BYTE	;are we magnifying
+	USER_VAR shrink_dir,BYTE	;direction of mag
+	USER_VAR shrink_lp,BYTE	;num shrinks to be performed
+
+	USER_VAR accel_f,BYTE	;are we accelerating
+	USER_VAR accel_dir,BYTE	;direction of accel
+	USER_VAR accel_lp,BYTE	;number of accels to be performed
+
+;-------------------
+
+	USER_VAR hot_x,BYTE	;hand coords
+	USER_VAR hot_y,BYTE	;MUST follow
+	USER_VAR w5_count,BYTE	;scroll counter for window 5
+	USER_VAR hand_mode,BYTE	;which mode are we in ?
+	USER_VAR can_switch,BYTE	;can we switch language ?
+
+	USER_VAR store_hand,BLITSIZE	     ;get hand background
+	USER_VAR get_hand,BLITSIZE	      ;replace background
+	USER_VAR blit_hand,BLITSIZE	      ;plot hand
+	USER_VAR hand_buf,hand_x*hand_y
+
+	USER_VAR horizontal,BYTE	;controller stuff
+	USER_VAR last_h,BYTE
+	USER_VAR vertical,BYTE
+	USER_VAR last_v,BYTE
+	USER_VAR fired,BYTE
+
+;-------------------
+
+	USER_VAR list_ptr,WORD	;pointer to list of items
+	USER_VAR syncit,BYTE	;counter for raster replacement
+
+;-------------------
+
+enlarge	equ dsp_src+4*WORD
+num_vtx	equ dsp_src+5*WORD
+source_l	equ dsp_src+6*WORD
+source_h	equ dsp_src+7*WORD	;source address of coords
+
+
+;---------------------------------------------------------------------
+
+	IF var_pc>65530	;test on upper memory limit
+	ERROR "Warning, User and System variables close to limit
+	ENDIF
+	IF var_pc<51200	;test on wrap around !
+	ERROR "User and System variables have wrapped around memory
+	ENDIF
+
+
+;---------------------------------------------------------------------
+;The start of the program
+
+	org CODE_START		;program start (define in DEFS.INC)
+	send COMPUTER1		;KAS is on computer1 link
+	exec CODE_START		;execution address upon downloading
+
+
+;---------------------------------------------------------------------
+;This code is only to be executed once, and is specific to the RAM
+;FLARE 1s. When the machine goes to ROM, the include files for the
+;shapes MUST be pre-processed, and NOT done here
+
+	initialise	;Standard
+
+	ld hl,faces1
+	call pre_process
+	ld hl,faces2
+	call pre_process
+	ld hl,faces3
+	call pre_process
+	ld hl,faces4
+	call pre_process
+	ld hl,faces5
+	call pre_process
+	ld hl,faces6
+	call pre_process
+	ld hl,faces7
+	call pre_process
+	ld hl,faces8
+	call pre_process
+
+	ld a,english
+	ld (language),a		;set initial language
+
+
+;-------------------------------------------------
+;The main body of the program. The DEMO outer loop
+
+demo_start
+
+	set_lores	;lo res mode
+	variable_on	;variable resolution ON !
+
+	ld bc,flicker_free	;for some reason the ONLY line that
+	int_line		;a palette load occurs correctly !
+	halt
+	ld hl,std_pal
+	load_rgb	;load the palette up
+
+	set_border black
+	cls both,black
+
+
+;-------------------
+
+	xor a
+	current	;give window 0 a font !
+	ld hl,font_1
+	font
+
+	window 1,wind_f1	;initialise the first 4 windows
+	ld hl,font_1
+	font
+
+	window 2,wind_f2
+	ld hl,font_2
+	font
+
+	window 5,wind_f5
+	ld hl,font_1
+	font
+
+	window 3,wind_f3
+	ld hl,font_1
+	font
+
+	window 6,wind_f6
+	ld hl,font_2
+	font
+
+;-------------------
+
+	ld bc,0	;int at top, for explosion of bits
+	int_line
+
+
+;------------------------------------
+;Initialise br_copy block with values
+
+	ld hl,br_copy
+	ld (hl),b_img_b+e_pos	;byte image WITH encoded pos
+	inc hl
+	inc hl
+	inc hl	;past coords
+	inc hl
+	ld (hl),1	;1 line wide
+
+
+;-------------------------------------------------------------------
+;Grab the KONIX white and red RGB values. Store them, and clear them
+
+	ld hl,red_rgb
+	ld (hl),15
+	inc hl
+	ld (hl),0
+	inc hl
+	ld (hl),0	;the red values !
+
+	ld hl,white_rgb
+	ld (hl),15
+	inc hl
+	ld (hl),15
+	inc hl
+	ld (hl),15	;the white value
+	
+	ld a,k_red
+	call zero_pal
+
+	ld a,k_white
+	call zero_pal
+
+
+;----------------------------------------------
+;Initialise the hand blitters, and start coords
+
+	ld a,66
+	ld (hot_x),a
+	ld (horizontal),a
+	ld a,60
+	ld (hot_y),a
+	ld (vertical),a		;set up hand initial positions
+
+	ld de,store_hand
+	ld hl,back_temp
+	ld bc,3*BLITSIZE
+	ldir		;both copied
+
+
+;---------------------------
+;Explode the Konix logo etc.
+
+	ld hl,ptstart	;Fill point table up (start=destination !)
+	ld de,ptable
+	ld a,18	;18 sets of points
+init_k	push hl
+	ldi
+	ldi
+	pop hl
+	ldi
+	ldi
+	dec a
+	jr nz,init_k	;INITIALLY just a BOX
+
+	call k_explode	;explode to nowhere (place initial image)
+
+
+;---------------------------------------
+;Now fade the colours in for the 2 boxes
+
+	ld bc,15*256	;16 levels (simulate final palette)
+$1	halt
+
+	ld hl,white_rgb
+	ld a,k_white
+	call fade_in
+
+	ld hl,red_rgb
+	ld a,k_red
+	call fade_in
+
+	inc c
+	djnz $1
+
+
+;----------------------------------------
+;Set up the flag plotting blitter program
+
+	ld hl,flag_temp
+	ld de,flag_blit
+	ld bc,BLITSIZE
+	ldir
+
+
+;------------------------------------------------
+;NOW explode the logo into position on the screen
+
+	call init_sound
+	call explode_l
+
+	ld hl,ptable+2	;the destination coords
+	ld e,18	;sets of points
+$2	random
+	cp 223	;255-23 (width of widest)
+	jr c,$3
+	sub 23
+$3	ld (hl),a
+	inc hl
+	ld a,b
+	and 127
+	add a,48	;avoid raster line
+	ld (hl),a
+	inc hl
+	inc hl
+	inc hl	;to next set
+	dec e
+	jr nz,$2
+
+	call explode_r	;left channel explosion sound
+	call k_explode	;explode outwards
+
+	ld hl,ptable+2	;now insert the destination coords !
+	ld de,dest_pts
+	ld a,18
+$4	ld b,(hl)
+	inc hl
+	ld c,(hl)
+	dec hl
+	dec hl
+	dec hl
+	ld (hl),b
+	inc hl
+	ld (hl),c	;copy old dest to start !
+	inc hl
+	ex de,hl
+	ldi
+	ldi		;copy new destination coords in
+	ex de,hl
+	inc hl
+	inc hl
+	dec a
+	jr nz,$4
+
+	call k_explode
+	permanent
+	draw_screen	;draw last image PERMANENTLY
+
+
+;------------------------------------
+;Partial line draw the window borders
+
+	ld a,white
+	ink		;set ink colour
+
+	ld a,borda_c
+	set_link
+	ld a,white
+	bright_pt
+
+	xor a
+outa_bord	push af
+	percentage
+
+	ld hl,lin_borda
+	ld b,12
+do_borda	push bc
+	ld c,(hl)	;x1
+	inc hl
+	ld b,(hl)	;y1
+	inc hl
+	ld e,(hl)	;x2
+	inc hl
+	ld d,(hl)	;y2
+	inc hl
+	pline
+	pop bc
+	djnz do_borda
+
+	permanent
+	draw_screen	;draw screen permanently
+
+	pop af
+	add a,5	;needs to go to 255
+	jp nc,outa_bord
+
+
+;---------------------------------
+;Scroll KONIX logo out of window 3
+;SET 50ish blits up first.
+;I'm gointakillaJON
+
+	ld de,dsp_dest		;re-use again !
+	ld a,w3_yz/2
+
+$7	halt
+	ld hl,konix_b1
+	ld bc,BLITSIZE*2
+	ldir
+	dec a
+	jr nz,$7	;copy left/right shutter scrolls in
+	dec de
+	ld (de),a	;zero last command
+
+;-------------------
+
+	ld hl,dsp_dest+SRCAD1	;modify Y psoitions
+	ld de,BLITSIZE-3
+	ld a,w3_ys
+	ld b,w3_yz
+$8	ld (hl),a
+	inc hl
+	inc hl
+	inc hl	;to DSTAD1
+	ld (hl),a
+	inc a
+	add hl,de
+	djnz $8
+
+;-------------------
+
+	ld b,50
+$9	halt
+	ld hl,dsp_dest
+	blit_run cpmpage,039h
+	djnz $9
+
+
+;------------------------------
+;Clear window 4. Print up flags
+
+	window 4,wind_f4
+	clw
+
+	ld a,white
+	ink
+	ld hl,font_1
+	font			;set font and ink
+
+	ld hl,flag_f
+	ld bc,f_flagx+256*f_flagy
+	ld a,0		;frame 0
+	call plot_flag
+
+	ld hl,flag_g
+	ld bc,g_flagx+256*g_flagy
+	ld a,0
+	call plot_flag
+
+	ld hl,flag_b
+	ld bc,b_flagx+256*b_flagy
+	ld a,0
+	call plot_flag
+
+	permanent
+	draw_screen
+
+
+;-----------------------------------
+;Print language messages in window 4
+
+	ld b,b_flagy-y_off
+	ld c,b_flagx+x_off
+	hcursor		;set hi-res cursor position
+	ld hl,b_titl		;print up three language thingees
+	pstring
+
+	ld b,f_flagy-y_off
+	ld c,f_flagx+x_off
+	hcursor
+	ld hl,f_titl
+	pstring
+
+	ld b,g_flagy-y_off
+	ld c,f_flagx+x_off
+	hcursor
+	ld hl,g_titl
+	pstring
+
+
+;-----------------------------------------
+;Initialise window 2 and the language crap
+
+	call init_lang
+
+
+;---------------------------------------------------------------------
+;Print a welcome message
+
+	ld a,3		;print in correct window
+	current
+
+	ld a,text_mode
+	ld (error_mode),a
+	ld a,lite_col
+	ink
+
+	ld hl,welcome1
+	pstring
+
+	ld b,120	;wait a while
+$1	halt
+	djnz $1
+
+
+;------------------------------------------------------------------
+;Move the interrupt to below window 1, for flicker free animation ?
+
+	ld bc,flicker_free
+	int_line
+
+
+;---------------------------------------------------------------------
+;Initialise everything so that we start from the beginning
+
+	xor a
+	ld (next_bit),a
+	ld (which_bit),a
+
+
+;-------------------
+
+	ld hl,MAX_VERTICES-1	;inform DSP of max number of vertices
+	ld (num_vtx),hl
+
+	ld hl,dsp_chunk
+	load_dsp
+
+	xor a		;set rotation to 0,0 degrees
+	ld (dx),a
+	ld (dy),a
+	ld (scroll_f),a	;no scrolling yet
+
+	ld hl,0
+	ld (last_coords),hl
+
+	call get_back
+
+
+;---------------------------------------------------------------------
+;Now go into HITCH-HIKERS main loop
+
+HITCH_MAIN	ld a,1
+	current	;to main display window
+	clw
+
+	ld a,hitch_mode		;error routine mode
+	ld (error_mode),a
+
+	call rest_back
+	call get_back
+
+	ld a,shape_ink
+	set_link
+
+
+;------------------------------------------
+;Now cycle through the shapes, and routines
+
+	xor a
+	ld (last_char),a	;NO last character
+	ld a,3	;must set every time (sequencer DESTROYS !)
+	current
+
+
+;-------------------
+
+	ld hl,next_bit	;set up the NEXT bit NOW, so hand can change it
+	ld a,(which_bit)
+	cp (hl)
+	jr nz,$1
+
+
+	ld a,(hl)
+	inc a
+	cp NUM_ACTIONS
+	jr nz,$1
+	xor a
+$1	ld (hl),a
+
+	ld a,scroll_t
+	ld (hand_mode),a		;force to show next item
+	ld a,w5_ysize/2
+	ld (w5_count),a		;scroll counts
+
+
+;-------------------
+
+	ld a,(which_bit)
+	ld c,a
+	add a,a
+	add a,a
+	add a,a
+	add a,c
+	ld c,a
+	ld b,0	;*9 'cos of format
+	ld hl,hi_level
+	add hl,bc
+	ld a,(hl)	;type indicator
+	inc hl
+	ld e,(hl)
+	inc hl
+	ld d,(hl)	;get the pointer out
+	inc hl
+
+	ld (seq_ptr),de	;set the sequence pointer (JUST in case)
+	cp data_ptr
+	jp z,a_shape
+
+	ld bc,ret_add
+	push bc	;in effect a call to the routine
+	push de	;de= pointer to a routine
+	ret
+
+
+;-------------------
+
+a_shape	ld a,(language)	;choose text depending upon the language
+	add a,a
+	ld c,a
+	ld b,0
+	add hl,bc	;hl now points to correct
+	ld c,(hl)
+	inc hl
+	ld b,(hl)
+	ld (message_ptr),bc
+
+	xor a
+	ld (shrink_f),a
+	ld (accel_f),a
+	ld a,2
+	ld (x_speed),a
+	call sequencer	;that's all there is to it
+
+
+;-------------------
+
+ret_add	ld a,(next_bit)
+	ld (which_bit),a
+	jp HITCH_MAIN
+

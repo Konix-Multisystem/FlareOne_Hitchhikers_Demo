@@ -1,0 +1,1088 @@
+
+
+
+;----------------------------- Copyright A.t.d. 1988 -----------------
+;
+;LOW_B.MAC
+;
+;The second half of the low level routines. Split because of the
+;restrictions PDS makes on file sizes. Again, all routines herein
+;are accessed by MACROs in LOW_INC.INC
+;
+;
+;Originally written on the ST.
+;
+;
+;Routines:
+;
+;	f_window	initialise on of the 8 windows allowed
+;	f_clw		clear the current window (IMMEDIATE command)
+;	f_current	set the current window
+;	f_pchar	print a character to current window
+;	f_pstring	print a string to the current window
+;	f_word_fit	DELETED intentionally
+;	f_cursor	set the character cursor pos in current window 
+;	f_font	set font for current window
+;	f_scroll	scroll the current window up 1 pixel
+;	f_draw_screen	drawblit/ swaps/ eraseblit in correct order
+;	f_swaps	swap screens and blitter lists
+;	f_load_dsp	load the DSP with porgram/data
+;	f_read_dsp	allows reading of data from DSP memory
+;	f_write_dsp	write to DSP memory
+;	f_random	generates 16/8 bit random number
+;	f_load_rgb	loads a palette chunk into palette ram
+;
+;
+;
+; ====================================================================
+; ==================== WINDOW chunk format ===========================
+; ====================================================================
+;
+;A window will consist of a 16 byte block, which defines everything !
+;that the LLR (low level routines) will need to know for printing
+;characters to that window. Rather restrictive use (characters only)
+;but the only need so far.
+;
+; Offset....	 num bytes...  function..........................
+;
+;   0		     1	       flag to say window exists (<>0)
+;   1		     1	       top left X coordinate
+;   2		     1	       top left Y coordinate
+;   3		     1	       X size
+;   4		     1	       Y size
+;   5		     1	       Paper colour
+;   6		     1	       Erase background before printing
+;   7		     1	       Cursor X position
+;   8		     1	       Cursor Y position
+;   9		     3	       Address of FONT block
+;  12		     1	       Character X size
+;  13		     1	       Character Y size
+;  14		     2	       Address of boundary error routine
+;
+;
+;Comments  Internal structure may change. This is not important to the
+;	   user, since they only access the block through these
+;	   routines
+;
+;
+;Set up a windows X,Y top coordinates and size
+;
+;IN  hl points to 8 bytes minimum definition, a=window number
+;
+
+f_window	push bc
+	push de
+	and MAXWIN-1		;ensure its in range
+	ld (cur_win),a		;set current window to it
+	push hl
+	ld hl,win_base
+	add a,a
+	add a,a
+	add a,a
+	add a,a
+	ld e,a
+	ld d,0		;get base of window to be
+	add hl,de
+	ld (cur_base),hl
+	set 0,(hl)		;flag its existence by setting BIT 0
+	inc hl		;move to W_TOPX
+	pop de
+
+	ex de,hl		;hl=window data,de=window block
+	ld bc,6
+	ldir			;transfer W_TOPX -> W_INK inclusive
+	ex de,hl		;de=window data,hl=window block
+	ld (hl),b		;zero cursor position
+	inc hl
+	ld (hl),b
+	ld c,6
+	add hl,bc
+	ex de,hl		;error address now
+	ldi
+	ldi			;copy that in
+
+; Nothing done about fonts !
+
+	pop de			;retrieve saved
+	pop bc
+	ret
+
+
+;---------------------------------------------------------------------
+;Clear the current window to its paper colour.
+;
+;IN  nowt
+;
+
+f_clw	push hl
+	ld ix,(cur_base)		;get base of current window block
+	ld a,(ix+W_XSIZE)
+	ld (clw_blit+INNER),a	;set inner with it
+	neg
+	ld (clw_blit+STEP),a	;step=256-inner
+	ld a,(ix+W_YSIZE)
+	ld (clw_blit+OUTER),a	;==ysize
+	ld a,(ix+W_PAPER)
+	ld (clw_blit+PATTERN),a	;fill value
+	ld a,(ix+W_TOPX)
+	ld (clw_blit+DSTAD0),a
+	ld a,(ix+W_TOPY)
+	ld (clw_blit+DSTAD1),a	;set dest address
+
+	ld a,scrbase
+	ld (clw_blit+DSTAD2),a
+
+	ld hl,clw_blit
+	blit_run cpmpage,051h	;fill visible screen
+
+
+	IF SWAPPING
+	ld a,scrbase2		;clear the back screen
+	ld (clw_blit+DSTAD2),a
+	blit_run cpmpage,51h	;fill the area !
+	ENDIF
+
+	pop hl			;retrieve hl
+	ret 
+
+
+;---------------------------------------------------------------------
+;Set the current window number, and base address up.
+;
+;IN  acc=new current window number (if it exists).
+;
+
+f_current	push bc
+	push de
+	push hl
+
+	ld c,a		;save for later
+	and MAXWIN-1		;ensure in range
+	add a,a
+	add a,a
+	add a,a
+	add a,a		;*16 (current WINSIZE)
+	ld e,a
+	ld d,0
+	ld hl,win_base
+	add hl,de
+	ld a,(hl)	;first byte denotes whether window defined
+	and it_exists	;bit 0 indicates that the  window exists
+	jr z,leave	;NOT defined, so dont change to this one
+	ld a,c
+	ld (cur_win),a		;OK so set current
+	ld (cur_base),hl		;set window base address
+
+leave	pop hl		;get saved values back
+	pop de
+	pop bc
+	ret
+
+
+; ====================================================================
+; ====================== Font chunk definition =======================
+; ====================================================================
+;Font format 
+;
+;   Offset..   Bytes...	 Function....................
+;
+;      0		1	 type flag
+;      1		n	 <type definition>
+;     n+1		1	 ASCII start character
+;     n+2		1	 ASCII of last character
+;     n+3		1	 Proportional spacing flag
+;     n+4	    2 each	 Offset to characters (from pointer) & widths
+;    n+4+3*m    m*x	 character definitions
+;
+; 
+;Print a character in the current window. Involves keeping it within
+;the bounds of the window and updating the cursor. If printing takes
+;the cursor off the bottom of the window, a user supplied routine is
+;called to handle it.
+;
+;IN  c=ASCII of character for printing
+;
+
+f_pchar	ld ix,(cur_base)		;get the font block address
+	ld l,(ix+W_FONTL)		;ignoring W_FONTP, because in CPMPAGE
+	ld h,(ix+W_FONTH)		;until 8088 versions
+
+	ld a,c		;test for newline character first
+	cp NEWLINE
+	jp nz,not_nl
+	ld a,(ix+W_XSIZE)		;force cursor off right of window
+	jp force_o
+
+not_nl	ld a,(hl)		;depends on the type as what to do
+	inc hl
+	and a			;test for n_plane
+	jp nz,tst_nt
+
+	inc hl
+	inc hl		;past width and height
+	ld b,(hl)		;get num colours (=number of col blits)
+	inc hl		;pts to colour table !
+	push hl		;save for later use
+	ld e,b
+	inc e			;1+num_colours i.e. past TRANSARENT
+	ld d,0
+	add hl,de		
+
+	ld a,c
+	sub (hl)
+	ld e,a			;e=c-(hl)=offset to pointer ?
+	jp c,out_r1
+	inc hl
+	ld a,c
+	cp (hl)		;test against last defined
+	jp z,in_r1		;same, so in range
+	jp c,in_r1		;bigger than last defined
+out_r1	pop hl		;balance the stack before returning
+	ret
+
+in_r1	inc hl		;proportional spacing ?
+	ld a,(hl)
+	inc hl		;to start of pointers
+	and a			;non zero means YES
+	jp nz,prop_1
+
+	sla e			;*2 cos word offsets !
+	add hl,de		;d=0 from earlier, at the pointer
+	ld e,(hl)
+	inc hl
+	ld d,(hl)		;get offset
+	ld a,(ix+W_CHARX)		;fixed width, so set width_ch
+	jp chr_p1
+
+prop_1	add hl,de
+	add hl,de
+	add hl,de		;3* cos word pointer & char width !
+	ld e,(hl)
+	inc hl
+	ld d,(hl)		;get pointer out
+	inc hl
+	ld a,(hl)		;width of character
+
+chr_p1	ld (width_ch),a		;set width used
+	add hl,de
+	inc hl		;points to character definition
+	pop de		;de=colour table pointer !, b=num colours
+
+	ld a,(ix+W_CHARY)
+	ld (chr_eras+OUTER),a
+	ld (chr_temp+OUTER),a	;can be set now, 'cos doesn't change
+
+	ld a,(ix+W_CURSY)
+	add a,(ix+W_TOPY)
+	ld (chr_eras+DSTAD1),a	;set destination y coords
+	ld (chr_temp+DSTAD1),a
+
+	ld a,(ix+W_CURSX)
+	add a,(ix+W_TOPX)
+	ld (chr_eras+DSTAD0),a	;set x coord destination
+	ld (chr_temp+DSTAD0),a
+
+	ld a,(ix+W_PAPER)
+	ld (chr_eras+PATTERN),a	;set background colour for erasing
+
+	ld a,(width_ch)		;get the width out
+widlo	ld c,8
+	cp c			;is it greater than 8 ?
+	jr nc,grta8		;yes !
+	ld c,a		;set width to it
+
+grta8	push af		;save loop counter
+	ld a,scrbase		;visible screen
+	ld (chr_temp+DSTAD2),a	;set it
+	ld (chr_eras+DSTAD2),a
+
+	ld a,c
+	ld (chr_eras+INNER),a
+	ld (chr_temp+INNER),a	;set the widths
+	neg
+	ld (chr_eras+STEP),a
+	ld (chr_temp+STEP),a	;set step to next line
+
+	ld a,chr_blit & 255	;get low part of chr_blit address
+	ld (chr_copy+DSTAD0),a
+	ld a,chr_blit / 256	;get hi part of chr_blit address
+	ld (chr_copy+DSTAD1),a	;set destination of character copy blit
+
+	ld a,071h		;command for character blitting
+	ld (chr_temp+NEXT_COM),a
+ 
+	push bc		;c is for subtracting
+	push de		;save pointer to the colours
+
+	ld a,b
+	dec a		;test for 1 colour plane
+	jp nz,coloop
+	ld a,(ix+W_INK)	;take the colour from the window info !
+	jp into_c
+
+coloop	ld a,(de)
+into_c	ld (chr_temp+PATTERN),a
+	inc de
+
+	ld (chr_temp+SRCAD0),hl	;source of data for a colour
+	push de
+	ld e,(ix+W_CHARY)
+	ld d,0		;add W_CHARY bytes to move to next col/COL
+	add hl,de		;move to next colour block
+
+	ld a,b
+	dec a
+	jp nz,nolst
+	ld (chr_temp+NEXT_COM),a	;if last blit block, set nxt command =0
+
+nolst	ld de,chr_copy		;perform copy blit operation
+	ld a,e
+	out (BLPC0),a
+	ld a,d
+	out (BLPC1),a
+	ld a,cpmpage
+	out (BLPC2),a		;send address of copy blit prog
+	ld a,21h
+	out (BLCMD),a
+
+	ld a,(chr_copy+DSTAD0)	;modify the write destination of copy blit
+	add a,BLITSIZE
+	ld (chr_copy+DSTAD0),a
+	ld a,(chr_copy+DSTAD1)
+	adc a,0
+	ld (chr_copy+DSTAD1),a
+
+	pop de
+	djnz coloop		;do for b (num colours) times
+
+	push hl		;save position in the data
+	ld hl,chr_blit
+	ld c,071h		;character paint command
+	ld a,(ix+W_ERASE)
+	and flag_eras		;erase back first ??
+	jr z,diffw1
+
+	ld hl,chr_eras		;erase the backgnd first
+	ld c,051h		;fill command
+
+diffw1	ld a,l
+	out (BLPC0),a
+	ld a,h
+	out (BLPC1),a
+	ld a,cpmpage
+	out (BLPC2),a
+	ld a,c
+	out (BLCMD),a
+
+
+	IF SWAPPING
+	ld hl,chr_eras+DSTAD2	;set destination addresses (all 8) to scrbase2
+	ld de,BLITSIZE
+	ld a,scrbase2
+	ld (hl),a
+	add hl,de
+	ld (hl),a
+	add hl,de
+	ld (hl),a
+	add hl,de
+	ld (hl),a
+	add hl,de
+	ld (hl),a
+	add hl,de
+	ld (hl),a
+	add hl,de
+	ld (hl),a
+	add hl,de
+	ld (hl),a
+
+	ld hl,chr_blit		;depending on ERASE flag do the blit !
+	ld c,071h		;character paint command
+	ld a,(ix+W_ERASE)
+	and flag_eras		;erase back first ??
+	jr z,$1
+	ld hl,chr_eras		;erase the backgnd first
+	ld c,051h		;fill command
+
+$1	ld a,l		;do the BLIT !!!!!!!!!!!!!
+	out (BLPC0),a
+	ld a,h
+	out (BLPC1),a
+	ld a,cpmpage
+	out (BLPC2),a
+	ld a,c
+	out (BLCMD),a
+	ENDIF
+
+
+	pop hl		;retrieve saved values
+	pop de
+	pop bc
+
+	ld a,(chr_temp+DSTAD0)	;modify x coordinate
+	add a,8
+	ld (chr_temp+DSTAD0),a
+	ld (chr_eras+DSTAD0),a	;must update both chr_temp and chr_eras
+
+	pop af			    
+	sub c			;subtract width calculated earlier
+	jp nz,widlo		;if not zero, then some more to do
+	jp tidyup
+
+;-------------------------------------------------
+
+tst_nt	dec a			;test for nibble type  NOT IMPLEMENTED YET !
+	jp nz,tst_bt
+	jp tidyup
+
+;-------------------------------------------------
+
+tst_bt	dec a			;test for byte type
+	ret nz		;RUN-LENGTH-ENCODED not allowed
+
+	ld d,a		;for addition to hl later
+	inc hl
+	inc hl
+	inc hl		;past width, height and num_colours
+
+	ld a,(hl)
+	ld (chr_bblk+PATTERN),a 	;transparent colour -> pattern for inhibit
+	inc hl
+
+	ld a,(ix+W_PAPER)
+	ld (era_bblk+PATTERN),a 	;colour for erase block JUST IN CASE
+	
+	ld a,c		;character number
+	sub (hl)
+	ld e,a		;e=c-(hl)=offset to pointer ?
+	ret c			;return if too low
+	inc hl
+	ld a,c
+	cp (hl)		;test against last defined
+	jp z,in_r3		;same, so in range
+	ret nc		;bigger than last defined so return
+
+in_r3	inc hl		;proportional spacing ?
+	ld a,(hl)
+	inc hl		;to start of pointers
+	and a			;non zero means YES
+	jp nz,prop_3
+
+	sla e			;*2 cos word offsets !
+	add hl,de		;at the pointer
+	ld e,(hl)
+	inc hl
+	ld d,(hl)		;get offset
+	ld a,(ix+W_CHARX)		;fixed width, so set width_ch
+	jp chr_p3
+
+prop_3	add hl,de
+	sla e
+	add hl,de		;3* cos word pointer & char width !
+	ld e,(hl)
+	inc hl
+	ld d,(hl)		;get pointer out
+	inc hl
+	ld a,(hl)		;width of character
+
+chr_p3	ld (width_ch),a		;set width used
+	add hl,de
+	inc hl		;points to character definition
+
+	ld (chr_bblk+SRCAD0),hl 	;this is the source address
+	ld a,cpmpage		;Z80 version only -get from WINDOW on 8088
+	ld (chr_bblk+SRCAD2),a
+
+	ld a,(width_ch)		;get the widths
+	ld (chr_bblk+INNER),a	;goes into INNER
+	ld (era_bblk+INNER),a
+	neg
+	ld (chr_bblk+STEP),a	;make a rectangle
+	ld (era_bblk+STEP),a
+	ld a,(ix+W_CHARY)
+	ld (chr_bblk+OUTER),a	;height
+	ld (era_bblk+OUTER),a
+
+	ld a,(ix+W_CURSX)
+	add a,(ix+W_TOPX)
+	ld (chr_bblk+DSTAD0),a	;x start=TOPX+CURSX
+	ld (era_bblk+DSTAD0),a
+	ld a,(ix+W_CURSY)
+	add a,(ix+W_TOPY)
+	ld (chr_bblk+DSTAD1),a	;y start=TOPY+CURSY
+	ld (era_bblk+DSTAD1),a
+
+	ld a,scrbase
+	ld (chr_bblk+DSTAD2),a	;on visible screen !
+	ld (era_bblk+DSTAD2),a
+
+	ld hl,chr_bblk		;just plonk it on !
+	ld c,31h
+	ld a,(ix+W_ERASE)
+	and flag_eras		;erase before plotting the character
+	jp z,diffw4
+	ld hl,era_bblk		;erase first
+	ld c,051h		;fill command
+
+diffw4	ld a,l
+	out (BLPC0),a
+	ld a,h
+	out (BLPC1),a
+	ld a,cpmpage
+	out (BLPC2),a		;send blitter address
+	ld a,c
+	out (BLCMD),a
+
+
+	IF SWAPPING
+	ld a,scrbase2
+	ld (chr_bblk+DSTAD2),a	;back screen
+	ld (era_bblk+DSTAD2),a
+
+	ld hl,chr_bblk
+	ld c,031h
+	ld a,(ix+W_ERASE)
+	and flag_eras		;test the flag
+	jp z,$1
+	ld hl,era_bblk
+	ld c,51h		;erase first
+
+$1	ld a,l
+	out (BLPC0),a
+	ld a,h
+	out (BLPC1),a
+	ld a,cpmpage
+	out (BLPC2),a
+	ld a,c
+	out (BLCMD),a
+	ENDIF
+
+
+;-------------------------------------------------
+
+tidyup	ld a,(width_ch)
+	add a,(ix+W_CURSX)
+force_o	ld c,a		;save temporarily
+	add a,(ix+W_CHARX)
+	jp c,offedg		;CARRY means overflow in BIG window !!!!
+	cp (ix+W_XSIZE)		;will another character move out of range
+	jp z,itson		;ONLY JUST FITS ON !
+	jp nc,offedg
+
+itson	ld a,c		;doesn't go off the edge
+	ld (ix+W_CURSX),a
+	ret
+
+offedg	xor a
+	ld (ix+W_CURSX),a		;off edge, so zero x position
+	ld a,(ix+W_CURSY)		;move y coordinate down one
+	add a,(ix+W_CHARY)
+	jr c,itsofag		;BUG FIX !
+	ld c,a
+	add a,(ix+W_CHARY)	;bottom out of window -NOT top
+	jr c,itsofag
+	cp (ix+W_YSIZE)		;off the bottom ?
+	jr nc,itsofag
+	ld (ix+W_CURSY),c		;set it
+	ret
+
+itsofag	ld l,(ix+W_ERROR)		;get address of error routine
+	ld h,(ix+W_ERROR+1)
+	jp (hl)		;jump to it -YEAH !!!!!!!!!
+
+
+;---------------------------------------------------------------------
+;Prints a string of characters to the screen. Ensures that words are
+;not split between lines also.
+;
+;IN  hl=pointer to start of string
+;
+
+f_pstring	push af		;in its most simple form
+chloop	ld a,(hl)		;WITHOUT WORD WRAP !
+	ld c,a		;c=character for printing !
+	and a
+	jp nz,no_fin
+	pop af
+	ret
+no_fin	push hl
+	pchar			;use pchar to print all the characters
+	pop hl
+	inc hl
+	jr chloop
+
+
+;---------------------------------------------------------------------
+;Sets the current windows cursor position in character coords and NOT
+;pixels.
+;
+;IN  b=Y char coord, c=X char coord
+;
+
+f_cursor	ld ix,(cur_base)
+	ld e,(ix+W_CHARX)
+	call mult32		;perform a=e*c for X coordinate
+	ld (ix+W_CURSX),a
+	ld c,b
+	ld e,(ix+W_CHARY)
+	call mult32		;perform a=e*c for Y coordinate
+	ld (ix+W_CURSY),a
+	ret
+
+
+;multiply routine. Assumes multiplier <=32 and result <256.
+
+mult32	xor a			;zero result and perform multiply
+	rr e
+	jr nc,fnoad0
+	add a,c
+fnoad0	sla c
+	rr e
+	jr nc,fnoad1
+	add a,c
+fnoad1	sla c
+	rr e
+	jr nc,fnoad2
+	add a,c
+fnoad2	sla c
+	rr e
+	jr nc,fnoad3
+	add a,c
+fnoad3	sla c
+	rr e
+	ret nc
+	add a,c
+	ret			;should work ?
+
+
+;=====================================================================
+;Set the font for the current window.
+;
+;Font format 
+;
+;   Offset..   Bytes...	 Function....................
+;
+;      0		1	 type flag
+;      1		n	 <type definition>
+;     n+1		1	 ASCII start character
+;     n+2		1	 ASCII of last character
+;     n+3		1	 Proportional spacing flag
+;     n+4	    2 each	 Offset to characters (from pointer) & widths
+;    n+4+3*m    m*x	 character definitions
+;
+;
+;IN  hla=20 bit address of font block	 MUST BE IN CPMPAGE at moment
+;
+
+f_font	ld ix,(cur_base)		;current window
+	ld (ix+W_FONTL),l
+	ld (ix+W_FONTH),h		;tell it about the font block
+
+	ld a,(hl)		;discard acc, cos of above condition (till 8088)
+	inc hl		;move into <type definition>
+
+	cp run_lc		;test for run_lc (NOT ALLOWED)
+	ret z			;return if so
+
+;Other 3 formats have similar formats !
+
+	ld a,(hl)		;width
+	ld (ix+W_CHARX),a
+	inc hl
+	ld a,(hl)		;height
+	ld (ix+W_CHARY),a
+	ret
+
+
+;---------------------------------------------------------------------
+;Scroll the current window upward 1 pixel. Line at bottom filled with
+;data specified by AHL. Allows patterns etc to be scrolled in
+;
+;IN  AHL= address of where fill line to come from
+;
+
+f_scroll	ld (scrl_blt+SRCAD0+BLITSIZE),hl
+	ld (scrl_blt+SRCAD2+BLITSIZE),a  ;set 20 bit addr of fill line
+
+	ld ix,(cur_base)		;get current window blocks base
+	ld a,(ix+W_XSIZE)		;hmm X size
+	ld (scrl_blt+INNER),a
+	ld (scrl_blt+INNER+BLITSIZE),a
+	neg
+	ld (scrl_blt+STEP),a	  ;its rectangular so STEP used
+	ld (scrl_blt+STEP+BLITSIZE),a ;more than one pixel scroll ?
+
+	ld a,(ix+W_YSIZE)
+	dec a
+	ret z			;1 pixel high window, so return
+	ld (scrl_blt+OUTER),a	;set scroll number
+
+	add a,(ix+W_TOPY)		    ;where to start filling
+	ld (scrl_blt+DSTAD1+BLITSIZE),a ;set it
+	ld a,1
+	ld (scrl_blt+OUTER+BLITSIZE),a	;Fill line =1 pixel
+
+	ld a,(ix+W_TOPY)		;get start
+	ld (scrl_blt+DSTAD1),a	;set it
+	inc a
+	ld (scrl_blt+SRCAD1),a	;to copy from
+
+	ld a,(ix+W_TOPX)
+	ld (scrl_blt+DSTAD0),a		;to x coord
+	ld (scrl_blt+SRCAD0),a		;from x coord
+	ld (scrl_blt+DSTAD0+BLITSIZE),a ;fill x start
+
+	ld a,scrbase		;do visible screen first
+	ld (scrl_blt+SRCAD2),a
+	ld (scrl_blt+DSTAD2),a
+	ld (scrl_blt+DSTAD2+BLITSIZE),a
+
+	ld hl,scrl_blt		;perfrom scroll on visible screen
+	blit_run cpmpage,039h	;LT1, SRCUP, DSTUP (copy rect)
+
+
+	IF SWAPPING
+	ld a,scrbase2
+	ld (scrl_blt+SRCAD2),a
+	ld (scrl_blt+DSTAD2),a
+	ld (scrl_blt+DSTAD2+BLITSIZE),a
+	blit_run cpmpage,039h
+	ENDIF
+
+
+	ret
+
+
+;---------------------------------------------------------------------
+;This is probably the most important routine in the low level stuff.
+;It takes care of drawing/erasing and the displaying of screens,
+;depending on whether or not screen swapping is employed.
+;
+;IF screen swapping, the order employed:
+;
+;	All blit ops to cmd_b2 (to start with)
+;	DRAWBLIT cmd_b2
+;	halt
+;	swaps
+;	DELBLIT cmd_b1
+;
+;	All blit ops to cmd_b1 now, RPT
+;
+;-------------------------------------------------
+;
+;No swapping:
+;
+;	writes to cmd_b2
+;	halt
+;	DELBLIT cmd_b1
+;	DRAWBLIT cmd b2
+;	swaps
+;
+;	writes now go to cmd_b1, RPT
+;
+
+f_draw_screen
+
+	IF SWAPPING
+	draw_blit	;draw the blitter list (to back screen)
+	halt		;synchronisation
+	swaps		;physically swap screens
+	ld hl,(blit_ptr)	;erase this list before writing new stuff
+	ld de,(mark_ptr)	;damage buffer to use
+	del_blit	;well erase it
+	ret
+	ELSE
+	ld hl,cmd_b1	;swapping not in use
+	ld de,dodgy1
+	ld a,(visible)
+	and a
+	jp z,$1
+	ld hl,cmd_b2
+	ld de,dodgy2
+
+$1	halt		;synchronisation here ?
+	del_blit	;use correct buffer in erase operation
+	draw_blit	;draw the blitter list
+	swaps		;swap buffers now (NOT screens)
+	ret
+	ENDIF
+
+
+;---------------------------------------------------------------------
+;Swap the current screen with its back screen, IF swapping enabled.
+;In either case change visible and blit_ptr...
+;
+;IN  nowt
+;
+
+f_swaps	ld hl,visible		;change visible/buffer flag....
+	ld a,(hl)
+	xor screen2		;toggle between 0 and 1
+	ld (hl),a
+	ld hl,cmd_b2		;change buffer, first or second ?
+	ld de,dodgy2		;and mark buffer
+	jp z,set_ok		;which buffer ? set the pointer
+	ld hl,cmd_b1		;changed our minds !
+	ld de,dodgy1
+
+set_ok	ld (blit_ptr),hl		;set the pointer
+	ld (mark_ptr),de		;set damage pointer
+
+
+	IF SWAPPING
+	ld hl,cmd1m
+	ld a,(hl)
+	xor 64		;toggle bit 6. Inform Flare hware
+	ld (hl),a
+	out (CMD1),a
+
+	ld hl,gpom
+	ld a,(hl)
+	xor 64		;tell the hware some more
+	ld (hl),a
+	out (GPO),a
+	ENDIF
+
+
+	ret
+
+
+; ====================================================================
+; ================== DSP chunk format NOT iff ========================
+; ====================================================================
+;
+;  Offset...	 num bytes...	   function........
+;
+;    0		     2		   address to be loaded to
+;    2		     2		   length of program to be loaded
+;    4		    2*n	   	   program words
+;  2*n+4	     	     2		   data load address
+;  2*n+6	           2		   length of data to be loaded
+;  2*n+8	          2*m	   	   data words
+;
+;
+;Initialies the DSP with data and program. Loads a program and its
+;data into the DSP (at a given address).
+;
+;IN  hl=address of DSP chunk. Program/data defs is internal
+;
+
+f_load_dsp
+
+	ld a,dsp_hlt		;MUST stop the dsp to load prog/data
+	out (RUNST),a
+
+	ld e,(hl)		;get the program start. PROGRAM first
+	inc hl
+	ld d,(hl)
+	inc hl
+	ld c,(hl)		;get the program length
+	inc hl
+	ld b,(hl)
+	inc hl
+
+prgld	ld a,e		;set the PC for loading program to
+	out (PROGRAM),a
+	ld a,d
+	out (PROGRAM),a
+	ld a,(hl)		;get a word of prog data and output it
+	out (MPROG),a
+	inc hl
+	ld a,(hl)
+	out (MPROG),a
+	inc hl
+	inc de		;increment the PC
+	dec bc
+	ld a,b
+	or c
+	jr nz,prgld
+
+	ld a,(hl)		;set INTRUDE to data start
+	out (INTRA),a
+	inc hl
+	ld a,(hl)
+	out (INTRA),a
+	inc hl
+	ld c,(hl)		;number of data words
+	inc hl
+	ld b,(hl)
+	inc hl
+
+lddata	ld a,(hl)		;out the data to INTRUDE post increment
+	out (INTRDP),a
+	inc hl
+	ld a,(hl)
+	out (INTRDP),a
+	inc hl
+	dec bc		;loop around BC times
+	ld a,b
+	or c
+	jr nz,lddata
+	ret
+
+
+;---------------------------------------------------------------------
+;Wait for the DSP to finish. Synchronises the Z80/8088 with the DSP
+;code currently executing
+;
+;IN  hl=address to get intrude data from, data returned in hl
+;
+
+f_read_dsp
+
+	push af		;do not corrupt
+$1	in a,(RUNST)		;wait for DSP to zero
+	and 7			;signals INTRUDE reached
+	jp nz,$1
+
+	intrude_at		;set the intrude address NOW
+
+$2	in a,(RUNST)		;wait for another intrude before
+	and 7			;reading the data
+	jp nz,$2
+
+	in a,(INTRD)		;get the data into HL
+	ld l,a
+	in a,(INTRD)
+	ld h,a
+
+	pop af		;recover state
+	ret
+
+
+;---------------------------------------------------------------------
+;Wait for the DSP to finish. Synchronises the Z80/8088 with the DSP
+;code currently executing
+;
+;IN  hl=address to write to, de=data to be written
+;
+
+f_write_dsp
+
+	push af		;do not corrupt
+
+$1	in a,(RUNST)		;wait for DSP to zero
+	and 7			;signals INTRUDE reached
+	jp nz,$1
+
+	intrude_at		;set the intrude address NOW
+
+$2	in a,(RUNST)		;wait for another intrude before
+	and 7			;reading the data
+	jp nz,$2
+
+	ld a,e
+	out (INTRD),a		;get the data into HL
+	ld a,d
+	out (INTRD),a
+
+	pop af		;recover state
+	ret
+
+
+;---------------------------------------------------------------------
+;Returns a 16 bit random number
+;
+;IN  nowt. OUT random number in BC
+;
+
+f_random	ld bc,(randno)
+	ld a,b
+	add a,67
+	ld b,a
+	ld a,c
+	adc a,231	;add 17383 (prime) in a funny way
+	ld c,a
+	ld a,r
+	and 127	;only 7 bits wide
+	add a,c
+	ld c,a
+	ld a,b
+	adc a,0
+	ld b,a
+	ld a,c
+	ld (randno),bc
+	ret
+
+
+;---------------------------------------------------------------------
+;Load the palette board with values
+;
+;IN: hl points to a palette chunk
+;
+
+PALAW	equ 50h	;palette address write mode
+PALVAL	equ 51h	;palette value reg
+PALMASK	equ 52h	;palette mask
+PALAR	equ 53h	;palette address read mode
+
+
+
+f_load_rgb	halt		;sync with ints to avoid SNOW
+
+	ld c,(hl)	;first palette no. for change
+	inc hl
+	ld b,(hl)	;number of changes to be made
+
+	ld a,255
+	out (PALMASK),a	;no active masking
+
+;-------------------
+
+$1	ld a,c
+	out (PALAW),a	;which palette number to be changed
+
+	inc hl
+	inc hl	;to top byte of word, RED first !
+	ld a,(hl)
+	and 1		;RED. for sign extension
+	ld e,a
+	ld a,(hl)
+	and 15
+	add a,a
+	add a,e
+	add a,a
+	add a,e	;sign extend 4 bits to 6
+	out (PALVAL),a
+	
+
+;-------------------
+
+	dec hl
+	ld a,(hl)	;GREEN
+	and 240
+	rrca
+	rrca
+	rrca
+	rrca		;top nibble to the bottom
+	ld d,a
+	and 1
+	ld e,a	;for sign extension
+	ld a,d
+	add a,a
+	add a,e
+	add a,a
+	add a,e	;4 to 6 bits
+	out (PALVAL),a
+
+
+;-------------------
+
+	ld a,(hl)
+	and 1		;BLUE
+	ld e,a
+	ld a,(hl)
+	and 15
+	add a,a
+	add a,e
+	add a,a
+	add a,e	;sign extend 4 bits to 6
+	out (PALVAL),a
+
+;-------------------
+
+	inc hl
+	inc c		;move to next palette number
+	djnz $1
+	ret
+
+

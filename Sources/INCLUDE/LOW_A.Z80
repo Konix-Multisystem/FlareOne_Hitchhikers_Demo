@@ -1,0 +1,1227 @@
+
+
+
+;----------------------------- Copyright A.t.d. 1988 -----------------
+;
+;LOW_A.MAC
+;
+;General (ish) low level routines for the KAS. This is the first of two
+;files. Two files are needed because of the limit on individual file
+;sizes which PDS imposes. All routines contained herein are accessed
+;via MACROs in LOW_INC.INC.
+;
+;Originally written on the ST, and assembled with m80 on the KAS
+;
+;
+;Routines:
+;	f_initialise	initialises various blitter blocks to RAM
+;	f_clr_blit	clears out 1 blitter block
+;	f_zerror	error routine for window 0
+;	f_drawblit	executes one of two blitter lists
+;	f_del_blit	erases one of the two blitter lists
+;	f_plot	inserts a plot blitter cmd into list
+;	f_p_ink	sets the plotting ink
+;	f_cline	inserts a coloured line blit into cmd list
+;	f_line	inserts a line blitter cmd into list
+;	f_cpline	as f_pline, except colour passed
+;	f_pline	insert partial line blit into cmd list
+;	f_l_ink	sets the line drawing ink
+;	f_copy	put copy block onto screen
+;	f_sprite	put a frame from a sprite block onto screen
+;	f_fill	inserts a fill blit cmd into list
+;	f_cls		clears one/both screens (IMMEDIATE command)
+;	
+;That concludes the routines in this file....
+;
+
+
+;---------------------------------------------------------------------
+;Routine which copies various blitter blocks to RAM for modification
+;before execution. Also must set up the video chip i.e. screen before
+;anything useful can be done with it
+;
+;IN  nowt, all registers DESTROYED
+;
+
+f_initialise 
+
+	xor a		;set the command registers and GPO up
+
+	out (runst),a	;STOP the DSP from executing !
+
+	ld (cmd2m),a	;set memory copy (CAN'T read port)
+	out (CMD2),a	;send value to port
+	ld (gpom),a	
+	out (GPO),a	;again for GPO
+
+	ld (cmd1m),a	;bit 2 not set, so interrupts allowed
+	out (cmd1),a
+
+
+;-------------------------------------------------
+;The following code is for producing DISK versions
+
+	pop hl	;retrieve ret addr from current SP
+	ld sp,1024	;Give us some stack space
+	push hl	;the return address
+
+	di
+	ld hl,int_rout
+	ld de,56
+	ld bc,end_int-int_rout
+	ldir			;over the DOS int routine
+
+;-------------------
+
+	ld bc,0	;interrupt on line 0
+	int_line
+
+	ei		;we can FINALLY enable the interrupts
+	ld b,20	;clear any interrupts which
+clrints	in a,(intack)	;may have just occured
+	djnz clrints
+
+	xor a
+	out (scrlv),a	;zero scroll registers
+	out (scrlh),a
+
+
+;ALL code before this point is for the STAND-ALONE versions (not CPM booted)
+
+
+	to_front	;scrbase to be the visible screen
+	copy_all
+	ld a,false	;set non-erasing of blit list FALSE
+	ld (flag_er2),a
+	ld (flag_er1),a
+
+	ld hl,cls_blit
+	call f_clr_blit	;initialise CLS blit space in RAM
+
+	ld hl,clw_blit	;initialise CLW blit space in RAM
+	call f_clr_blit
+
+	ld hl,scrl_blt		;initialise 2 scroll blitters
+	call f_clr_blit
+	ld (hl),021h		;set next command to LT1 & RUN (copy)
+	ld hl,scrl_blt+BLITSIZE	;2nd one
+	call f_clr_blit
+
+	ld hl,chr_eras	;character paint backgnd erase blitter
+	call f_clr_blit
+	ld (hl),071h	;blitter command for painting chars
+
+	ld hl,chr_temp	;character painting template
+	call f_clr_blit
+	ld hl,cpy_temp	;copy template n-plane
+	call f_clr_blit
+
+	ld a,0a0h		;character paint LOG_CMP byte ?
+	ld (chr_temp+LOG_CMP),a
+	ld (cpy_temp+LOG_CMP),a
+	ld a,4
+	ld (chr_temp+MODE),a	;tell it bit to byte expansion !!!!!!!!
+	ld (cpy_temp+MODE),a
+	ld a,cpmpage
+	ld (chr_temp+SRCAD2),a	;Z80 version only
+
+	ld hl,era_bblk		;erase blit for byte blocks
+	call f_clr_blit
+	ld (hl),031h		;command for block fonts
+
+	ld hl,chr_bblk		;character paint byte block !
+	call f_clr_blit
+	ld a,0c8h		;inhibit write on transparent colour !
+	ld (chr_bblk+LOG_CMP),a
+
+	window 0,initwin		;set window 0 up as the screen
+	jp f_blitinit		;initialise blitter stuff now
+
+
+;-------------------
+
+int_rout	di
+	push af
+	in a,(INTACK)
+	pop af
+	ei
+	reti
+end_int
+
+;-------------------
+
+f_clr_blit 
+
+	xor a			;clears a blitter to 0, except LOG_CMP
+	ld (hl),a		;SRC0
+	inc hl
+	ld (hl),a
+	inc hl
+	ld (hl),a
+	inc hl
+	ld (hl),a		;DST0
+	inc hl
+	ld (hl),a
+	inc hl
+	ld (hl),a
+	inc hl
+	ld (hl),a		;mode
+	inc hl
+	ld (hl),0c0h		;LOG_CMP
+	inc hl
+	ld (hl),a		;inner
+	inc hl
+	ld (hl),a		;outer
+	inc hl
+	ld (hl),a		;step
+	inc hl
+	ld (hl),a		;pattern
+	inc hl
+	ld (hl),a		;next_command. hl left pointing to this
+	ret
+
+;------ Window 0 definition (the SCREEN) ---------
+
+initwin 	defb 1		;top X
+	defb 1		;top Y
+	defb 254		;X size
+	defb 254		;Y size
+	defb 219		;paper= DULL GREY
+	defb 0		;ink colour= black !
+	defw f_zerror		;error handler
+
+;-------- ERROR routine for the screen ! ---------
+
+f_zerror	ld bc,0		;zero the hires cursor coords !
+	hcursor		;causes a return
+
+
+
+;---------------------------------------------------------------------
+;Initialise a blitter program for copying Line, Copy, Fill or Point
+;templates into either of the blit buffers
+;
+;IN  nowt
+;
+
+f_blitinit 
+
+	ld hl,do_tmp		;copy the template blit prog into
+	ld de,dam_blit		;RAM for modification
+	ld bc,BLITSIZE
+	ldir
+
+	ld hl,do_chr		;copy the character copy template
+	ld de,chr_copy		;into RAM for mods
+	ld c,BLITSIZE		;b=0 from above
+	ldir
+
+	ld hl,do_chr		;use the same template for
+	ld de,cpy_copy		;copying COPY blits into place !
+	ld c,BLITSIZE
+	ldir
+
+	ld hl,cpy_temp		;needs modifying in terms of
+	ld (cpy_copy+SRCAD0),hl	;source adress
+
+	ld hl,pnt_blt
+	ld de,pt_blit		;copy from ROM to RAM for mods
+	ld c,BLITSIZE		;b=0 from above
+	ldir
+
+	ld hl,dodgy1		;set both mark buffers to NULL
+	ld de,dodgy1+1
+	ld bc,2*BLITNUM-1
+	ld (hl),null_
+	ldir
+
+	xor a
+	ld (cmd_b1),a		;zero both blitter commands
+	ld (cmd_b2),a
+
+	ld hl,dodgy2		;screen 0 vis, so dodgy2 buffer
+	ld (mark_ptr),hl
+
+	ld hl,cmd_b2		;one before blitbuf2 (=command for 1st block)
+	ld (blit_ptr),hl		;hence buffer 2 is for writing to
+	ret
+
+
+; Blitter program to copy point plotting blit progs into buffers
+
+do_tmp	defw pt_blit
+	defb cpmpage		;source=pt_blit
+	defb 0,0,cpmpage		;destination
+	defb 0		;mode
+	defb 0c0h		;logical op = dest <- source
+	defb 1		;outer, do it once !
+	defb BLITSIZE		;copy blitsize bytes !
+	defb 0,0		;pattern (not set), nxt command= STOP.
+
+
+; Blitter program to copy character templates into position !
+
+do_chr	defw chr_temp		;source= character template
+	defb cpmpage
+	defb 0,0,cpmpage		;destination changes
+	defb 0		;mode
+	defb 0c0h		;logical op = dest <- source
+	defb 1		;outer
+	defb BLITSIZE		;copy blit template
+	defb 0
+	defb 0,0		;pattern (not set), nxt command= STOP
+  
+
+;---------------------------------------------------------------------
+;Execute the built up list of blitter commands. Must insert a stop
+;command on the last blit block first.
+;
+;IN  nowt
+;
+
+f_drawblit
+
+	ld hl,cmd_b1		;just in case second screen is visible
+
+	ld a,(visible)		;which screen is visible ?
+	and a			;use this info to decide which buffer &
+	jp nz,use_0		;command to use
+	ld hl,cmd_b2		;use second !, 1st is visible
+
+use_0	ld c,(hl)		;get the command byte for 1st block
+	inc hl		;move to commands
+	ld a,l
+	out (BLPC0),a		;send address of prog
+	ld a,h
+	out (BLPC1),a
+	ld a,cpmpage		;now the page
+	out (BLPC2),a
+	ld a,c		;recover the command
+	out (BLCMD),a		;start the blits
+	ret
+
+
+;---------------------------------------------------------------------
+;Erase the back-screen (if there is one) using the second blitter
+;command list. Must replace all copy blits with FILLS to backgrnd
+;colour. Also checks PARRD bit in the command byte, and adjusts
+;its operation accordingly (parrd set means a partial line !).
+;
+;IN  hl=which list, de=which mark buffer
+;
+
+f_del_blit 
+
+	ld a,(flag_er2)	;test if should be deleting this blit list
+	and a
+	jp nz,scrl_er	;bypass this lot, and scroll flag_er1
+
+	push hl 	;save for execution addr later
+	ld bc,BLITSIZE-1	;increment to PATTERN in blitter list
+
+f_clop	ld a,(hl)	;get block command byte
+	and a		;is it zero i.e. STOP
+	jr z,end_er	;yes, then to run it
+
+	and parrd_and	;test for PARTIAL LINES
+	jp z,no_part
+
+	ld a,(scrn_col)	;colour to set line to
+	add hl,bc
+	ld (hl),a	;set it
+	inc hl	;move to PATTERN2 (=pattern+3 !)
+	inc hl
+	inc hl
+	ld (hl),a	;set it !
+	inc hl	;move to next command
+
+	inc de	;to next in mark buffer
+	jp f_clop	;jump back, c NOT changed so quicker
+
+;-------------------
+
+no_part	ld a,(de)	;get type of blit block
+	inc de	;move to next
+	cp copy_	;copies are the ones to change
+	jr z,cpy_type
+
+	add hl,bc	;move to pattern
+	ld a,(scrn_col)	;get colour info
+	ld (hl),a	;set it
+	inc hl	;move to next command
+	jp f_clop	;c not modified so quicker
+
+;-------------------
+
+cpy_type	ld (hl),051h		;change to FILL loop type (type 2)
+	ld c,LOG_CMP+1		;addition to get to LOG_CMP
+	add hl,bc
+	ld (hl),0c0h		;no write INHIBIT
+	ld c,PATTERN-LOG_CMP	;addition to get to PATTERN
+
+	add hl,bc	;move to PATTERN
+	ld a,(scrn_col)
+	ld (hl),a	;set colour to background colour
+	inc hl	;move to next command byte
+	ld c,BLITSIZE-1	;restore C to old value, ready for next
+	jp f_clop
+
+;-------------------
+
+end_er	pop hl	;BOTH deletes jump to here. Retrieve
+	ld c,(hl)	;buffer start and get command !
+	inc hl
+	ld a,l
+	out (BLPC0),a	;send address of prog
+	ld a,h
+	out (BLPC1),a
+	ld a,cpmpage	;now the page
+	out (BLPC2),a
+	ld a,c	;recover the command
+	out (BLCMD),a	;start the blits
+
+scrl_er	ld (hl),0	;B U G F I X   serious cock-up !!!!!!
+	ld hl,flag_er1	;flag_er2 <- flag_er1, flag_er1 <- FALSE
+	ld a,(hl)
+	ld (hl),false
+	inc hl	;flag_er2 MUST FOLLOW flag_er1
+	ld (hl),a
+	ret
+
+
+;---------------------------------------------------------------------
+;Insert a PLOT template (if one doesn't already exist in the list)
+;into the blitter command list. Plots a point
+;
+;IN  b=Y coord of point, c=X coord of point
+;
+
+f_plot 	push hl
+	ld (pt_blit+DSTAD0),bc	;set the coords
+	ld a,(plot_col)
+	ld (pt_blit+PATTERN),a	;set the colour
+
+
+	IF SWAPPING
+	ld a,(visible)
+	xor scrbase2
+	ELSE
+	ld a,scrbase
+	ENDIF
+
+
+	ld (pt_blit+DSTAD2),a	;tell it which screen
+	ld hl,(blit_ptr)		;where blit to go
+	ld (hl),0a1h		;set command for this block
+	inc hl		;move to start
+	ld (dam_blit+DSTAD0),hl	;tell blit prog where to put
+
+	ld de,BLITSIZE-1
+	add hl,de
+	ld (blit_ptr),hl		;move to next blit pointer
+
+	ld hl,dam_blit		;run blit prog to set template
+	blit_run cpmpage,21h	;read source, write dest
+
+	ld hl,(mark_ptr)		;inform mark buffer of type
+	ld (hl),point_
+	inc hl
+	ld (mark_ptr),hl		;move to next
+
+	pop hl		;retrieve saved hl
+	ret
+
+
+;Template for plotting points !
+
+pnt_blt	defb 0,1,0		;source
+	defb 0,0,0		;dest
+	defb 0		;mode
+	defb 0c0h		;log_cmp = dest <- source
+	defb 1,1,1		;outer,inner,step
+	defb 0,0		;pattern,next command
+
+
+
+;---------------------------------------------------------------------
+;Set the plot ink, depending on the mode.
+;
+;IN  acc=colour
+;
+
+f_p_ink 	ld (plot_col),a	;If lo res then OK
+	ld c,a
+	ld a,(cmd2m)
+	and mode_and		;test the mode
+	ret z			;return if lo res
+	ld a,c
+	and 15		;bottom nibble to top
+	rrca
+	rrca
+	rrca
+	rrca
+	or c
+	ld (plot_col),a
+	ret
+
+
+;---------------------------------------------------------------------
+;Insert a line template into the blitter list. The colour of the line
+;is also passed as a parameter ALONG with the line start and end
+;points. line_col (system variable) is also affected.
+;
+;IN: B,C=Y1,X1, D,E=Y2,X2. Accumulator= colour
+;
+
+f_cline	ld (line_col),a	;set colour, THEN just carry on into LINE code !
+
+
+;---------------------------------------------------------------------
+;Insert a LINE template into the blitter list. This draws a line when
+;the blitter is run
+;
+;IN  b=Y start coord, c=X start, d=Y finish, e=X finish
+;
+
+f_line	push hl
+	xor a
+	ex af,af'		;af'=mode. X,Y signs and x>y ?
+
+	ld a,e
+	sub c			;finish X - start X
+	jr nc,nonegx
+	ex af,af'
+	or 128		;-ve dx bit
+	ex af,af'
+	neg			;negate for ABSOLUTE value
+nonegx	ld e,a		;e=dx
+	ld a,d
+	sub b
+	jr nc,nonegy		;finish Y - start Y
+	ex af,af'
+	or 64			;-ve dy bit
+	ex af,af'
+	neg
+nonegy	ld d,a		;d=dy
+	sub e			;test if dx>dy
+	jr nc,ybiga
+	ex af,af'		;dx>dy so set the correct bit
+	or 32
+	ex af,af'
+	ld a,e
+	ld e,d
+	ld d,a		;swap d and e, so d=DELTA1, e=DELTA2
+
+ybiga	ld hl,(blit_ptr)
+	ld a,(cmd2m)		;get the mode
+	and mode_and
+	ld (hl),0c1h		;lores =mode 2 line drawing
+	jr z,lo_dr
+	ld (hl),0a1h		;hires =mode 1 line drawing
+lo_dr	inc hl		;to start of this one !
+
+	ld a,d		;a=delta1
+	srl a			;a=delta1/2
+	ld (hl),a		;SRC0=delta1/2
+	inc hl
+	ld (hl),d		;SRC1=delta1
+	inc hl
+	inc hl
+	ld (hl),c		;DST0=x start
+	inc hl
+	ld (hl),b		;DST1=y start
+	inc hl
+
+
+	IF SWAPPING
+	ld a,(visible)
+	xor scrbase2
+	ld (hl),a
+	ELSE
+	ld (hl),scrbase
+	ENDIF
+
+
+	inc hl
+	ex af,af'		;mode= sgn dx, sgn dy, x>y ?
+	ld (hl),a
+	inc hl
+	ld (hl),0c0h		;log_cmp. dest <- source
+	inc hl
+	ld bc,1		;faster set (hl) thru reg. b=0, c=1
+	ld (hl),c		;outer=0
+	inc hl
+
+	ld a,d		;BUGFIX. Plot a point if delta1=0 !
+	cp c			;compare against 1. If 0 then carry
+	adc a,b		;Add 0 with carry (if a=0 ->1)
+	ld (hl),a		;inner=delta1
+	inc hl
+	ld (hl),e		;step=delta2
+
+	inc hl
+	ld a,(line_col)		;pattern=colour
+	ld (hl),a
+	inc hl
+	ld (hl),b		;set next command to STOP=0
+	ld (blit_ptr),hl		;pointing to next one !
+
+	ld hl,(mark_ptr)		;inform mark buffer of type
+	ld (hl),line_
+	inc hl
+	ld (mark_ptr),hl		;move to next
+
+	pop hl		;retrieve saved hl
+	ret
+
+
+;---------------------------------------------------------------------
+;As pline, except that partial line colour passed along with start and
+;end points
+;
+;IN see below, A=colour
+;
+
+f_cpline	ld (line_col),a		;just follows on into pline !
+
+
+;---------------------------------------------------------------------
+;Insert a PARTIAL LINE template into the blitter list. These blitters
+;are 16 and NOT 13 bytes big, because they employ a PARRD (param read
+;loop) to plot the bright point just ahead of the line !
+;
+;IN  b=Y start coord, c=X start, d=Y finish, e=X finish
+;
+;The length of line to be drawn is contained in the system variable
+;
+;	line_len
+;
+;If line_len > actual length of the line, then the line is drawn
+;without the bright point ahead of it
+;
+;The colour of the bright point for plotting is set by: bright_pt
+;del_blit HANDLES the erasing of these blits
+;
+
+f_pline 	push hl
+	xor a
+	ex af,af'	;af'=mode. X,Y signs and x>y ?
+
+	ld a,e
+	sub c		;finish X - start X
+	jr nc,p_nonegx
+	ex af,af'
+	or 128	;-ve dx bit
+	ex af,af'
+	neg		;negate for ABSOLUTE value
+p_nonegx	ld e,a	;e=dx
+	ld a,d
+	sub b
+	jr nc,p_nonegy	;finish Y - start Y
+	ex af,af'
+	or 64		;-ve dy bit
+	ex af,af'
+	neg
+p_nonegy	ld d,a	;d=dy
+	sub e		;test if dx>dy
+	jr nc,p_ybiga
+	ex af,af'	;dx>dy so set the correct bit
+	or 32
+	ex af,af'
+	ld a,e
+	ld e,d
+	ld d,a	;swap d and e, so d=DELTA1, e=DELTA2
+
+p_ybiga	ld hl,(blit_ptr)
+	ld a,(cmd2m)	;get the mode
+	and mode_and
+	ld (hl),0c5h	;lores =mode 2 line drawing PARRD set
+	jr z,p_lodr
+	ld (hl),0c5h	;hires =same as lores drawing CHANGE !
+p_lodr	inc hl	;to start of this one !
+
+	ld a,d	;a=delta1
+	srl a		;a=delta1/2
+	ld (hl),a	;SRC0=delta1/2
+	inc hl
+	ld (hl),d	;SRC1=delta1
+	inc hl
+	inc hl
+	ld (hl),c	;DST0=x start
+	inc hl
+	ld (hl),b	;DST1=y start
+	inc hl
+
+
+	IF SWAPPING
+	ld a,(visible)
+	xor scrbase2
+	ld (hl),a
+	ELSE
+	ld (hl),scrbase
+	ENDIF
+
+
+	inc hl
+	ex af,af'	;mode= sgn dx, sgn dy, x>y ?
+	ld (hl),a
+	inc hl
+	ld (hl),0c0h	;log_cmp. dest <- source
+	ld bc,1	;SPEED UP. b=0, c=1
+	inc hl
+	ld (hl),2	;outer=2 because of PARRD !
+	inc hl
+
+	ld a,(line_len)	;how much to be drawn ?
+	cp d		;d>a then carry set, and some left
+	jp c,do_more
+
+	ld a,d
+	cp c		;d CAN be zero, so must test. test against 1
+	adc a,b	;if a=0 then carry,a <-1 (cos b=1)
+	ld (hl),a
+	inc hl	;so no need to check for delta1=0 (V long line)
+	ld (hl),e
+	inc hl
+	ld a,(line_col)
+	ld (hl),a	;pattern <- colour
+	inc hl
+
+	ld (hl),c	;inner2 =1 (c=1 !)
+	inc hl
+	ld (hl),c	;step2=1
+	jp part_col	;dot takes on colour of rest of line !
+
+;---------------------------------------
+
+do_more	cp c		;a COULD BE 0 (V long line). IF a=0 then carry
+	adc a,b	;a becomes 1 if it was 0
+	ld (hl),a	;inner= partial amount from line_len
+	inc hl
+	ld (hl),e	;step=delta2
+	inc hl
+	ld a,(line_col)	;pattern=colour
+	ld (hl),a
+	inc hl
+
+	ld (hl),c	;inner2 set to 1 (a point) (c=1)
+	inc hl
+	ld (hl),c	;step2 =1
+	ld a,(bright_col)
+
+part_col	inc hl
+	ld (hl),a
+	inc hl
+
+	ld (hl),b	;set next command 2 to STOP=0 (b=0)
+	ld (blit_ptr),hl	;pointing to next one !
+
+	ld hl,(mark_ptr)	;inform mark buffer of type
+	ld (hl),line_
+	inc hl
+	ld (mark_ptr),hl	;move to next
+
+	pop hl	;retrieve saved hl
+	ret
+
+
+;---------------------------------------------------------------------
+;Set the line ink, depending on the mode.
+;
+;IN  acc=colour
+;
+
+f_l_ink 	ld (line_col),a		;If lo res then OK
+	ld c,a
+	ld a,(cmd2m)
+	and mode_and		;test the mode
+	ret z			;return if lo res
+	ld a,c
+	and 15		;bottom nibble to top
+	rrca
+	rrca
+	rrca
+	rrca
+	or c
+	ld (line_col),a
+	ret
+
+
+
+;---------------------------------------------------------------------
+;Insert a copy block template into the blitter command list. SEE
+;chunks.doc for format of copy blocks.
+;
+;IN  ahl=20 bit address of the copy block CHUNK.
+;    B,C=Y,X positions for printing (if NOT contained in the chunk)
+;
+
+f_copy	push de	;save until later
+	ld (b_chunk),hl	;save chunk address (16 bits)
+	ld (b_page),a	;now the other 4 bits
+
+	ld d,h	;copy to d for shifting
+	sla d		;a<- a*4 + 2 MSBs of h (ie calculate REAL addr)
+	rla
+	sla d
+	rla		;now 64> a >=0 (ie. the page number !)
+	out (BANK3),a	;page the bank in
+	ld a,h
+	or 11000000b	;ensure hl is 49152 to 65535
+	ld h,a
+
+	ld a,(hl)	;get byte
+	and e_pos	;position int the block ?
+	ld a,(hl)	;for later testing
+	inc hl	;move on
+	jr z,nopos
+
+	ld c,(hl)	;get X pos
+	inc hl
+	ld b,(hl)	;get Y pos
+	inc hl
+
+nopos	push bc	;save the position 'til later
+	ld c,(hl)	;get width
+	inc hl
+	ld b,(hl)	;and the height into BC
+	inc hl
+
+	and pos_mask	;test for type ONLY (mask out the position flag)
+	jp nz,test_n
+	
+	ld d,(hl)	;number of colours involved
+	ld e,d	;save for pushing !
+	inc hl	;to the first one
+f_dloop	ld a,(hl)
+	push af	;store for later (on the stack)
+	inc hl
+	dec d
+	jr nz,f_dloop
+
+	inc hl	;past the transparent colour
+	ld a,TOP_PAGE
+	out (BANK3),a	;correct RAM page back in (isn't that a GAME ?)
+
+	ld a,(b_chunk+1)	;restore 2 MSBs to hl. Get original 'H'
+	xor h
+	and 11000000b
+	xor h
+	ld h,a	;h <- 2 MSBs a + 6 LSBs h
+
+	ld ix,n_colours-1 ;RAM colour table
+	ld a,b
+	ld (cpy_temp+OUTER),a	;insert HEIGHT into copy template
+	ld b,e		;b-number of colours
+
+	add ix,de	;e=num colours, d=0
+get_cols	pop af	;retrieve colour s in reverse order
+	ld (ix+0),a
+	dec ix
+	dec e
+	jr nz,get_cols
+
+	pop de		;retrieve positions saved on stack earlier
+	ld (cpy_temp+DSTAD0),de
+
+
+	IF SWAPPING
+	ld a,(visible)
+	xor scrbase2
+	ELSE
+	ld a,scrbase
+	ENDIF
+
+
+	ld (cpy_temp+DSTAD2),a	;can be set now !
+	ld a,(b_page)		;get page
+	ld (cpy_temp+SRCAD2),a	;set srcad2 with it
+
+	ld a,c	;get the width of the image
+cpy_wid	ld c,8	;outer loop
+	cp c
+	jr nc,grta_blk
+	ld c,a	;last section <8 pixels wide
+
+grta_blk	push af	;save until later
+	ld a,c
+	ld (cpy_temp+INNER),a	;set width
+	neg
+	ld (cpy_temp+STEP),a	;and step
+	push bc		;b=number of colours, c=width
+	ld ix,n_colours	;de points to colour information block
+
+loop_of8	ld (cpy_temp+SRCAD0),hl	;set the source address
+	ld a,(cpy_temp+OUTER)	;get height of column
+	ld e,a
+	ld d,0
+	add hl,de		;update the source address
+	push hl
+
+	ld hl,(mark_ptr)
+	ld (hl),fill_	;LIE -tell the mark buffer it's a fill blit !
+	inc hl
+	ld (mark_ptr),hl
+
+	ld hl,(blit_ptr)		;where to copy to
+	ld (hl),071h		;command byte for char painting
+	inc hl
+	ld (cpy_copy+DSTAD0),hl	;set copy template address
+	
+	ld a,(ix+0)		;get the colour info
+	ld (cpy_temp+PATTERN),a	;set the colour
+	inc ix		;move to next
+
+	ld e,BLITSIZE-1		;d=0 from earlier
+	add hl,de		;change blit_ptr
+	ld (blit_ptr),hl
+
+	ld de,cpy_copy	;perform blit to copy template into list
+	ld a,e
+	out (BLPC0),a
+	ld a,d
+	out (BLPC1),a
+	ld a,cpmpage
+	out (BLPC2),a
+	ld a,21h
+	out (BLCMD),a	;copies template
+
+	pop hl	;retrieve it
+	djnz loop_of8	;loop around for the number of colours
+
+	ld a,(cpy_temp+DSTAD0)	;modify the x coordinate
+	add a,8
+	ld (cpy_temp+DSTAD0),a
+
+	pop bc
+	pop af	;outer width loop
+	sub c		;subtract the width
+	jp nz,cpy_wid	;BUGFIX              ahhhhh
+
+	pop de	;first push !
+	ret
+
+
+;-------------------------------------------------
+
+test_n	dec a
+	jp nz,test_b	;NOT yet implemented
+
+clean_1	pop bc
+	ld a,TOP_PAGE	;get original page back in
+	out (BANK3),a
+	pop de	;saved value
+	ret
+
+
+;-------------------------------------------------
+
+test_b	dec a		;test for byte type blocks
+	jp nz,clean_1
+
+	inc hl	;past num colours
+	ld a,(hl)	;transparent colour
+	inc hl	;hl points to data now
+
+	push af	;save until correct RAM paged in
+	ld a,TOP_PAGE	;page top bank back in ! ASSUMED VALUE !!
+	out (BANK3),a	;get original page back
+	pop af
+	ld (b_trans),a	;save until required in blitter
+
+	ld a,(b_chunk+1)	;restore 2 MSBs to hl. Get original 'H'
+	xor h
+	and 11000000b
+	xor h
+	ld h,a	;h <- 2 MSBs a + 6 LSBs h
+
+;-------------------
+
+into_copy	ex de,hl	;de=address of block    SPRITE JUMPS TO HERE
+	ld hl,(blit_ptr)	;where to put blit info
+	ld (hl),031h	;command for COPY operation
+	inc hl
+
+	ld (hl),e	;SRCAD0
+	inc hl
+	ld (hl),d	;SRCAD1
+	inc hl
+	ld a,(b_page)
+	ld (hl),a	;SRCAD2 (page of copy block !)
+
+	pop de	;retrieve positions saved earlier
+	inc hl
+	ld (hl),e	;DSTAD0 (x coord !)
+	inc hl
+	ld (hl),d	;DSTAD1 (y coord !)
+	inc hl
+
+
+	IF SWAPPING
+	ld a,(visible)
+	xor scrbase2
+	ld (hl),a
+	ELSE
+	ld (hl),scrbase
+	ENDIF
+
+
+	inc hl
+	ld (hl),0	;mode=0
+	inc hl
+	ld (hl),0c8h	;LOG_CMP=dest <- source with TRANS write inhibit
+	inc hl
+	ld (hl),b	;outer=height
+
+;-------------------
+
+	ld a,(to_copy)	;print all or some of sprite ?
+	and a		;0 means ALL
+	jp z,$1
+	cp b
+	jp nc,$1
+	ld (hl),a	;a<b so use a
+
+$1	inc hl
+	ld (hl),c	;inner=width
+	inc hl
+	xor a
+	sub c		;step=256-width
+	ld (hl),a
+	inc hl
+	ld a,(b_trans)
+	ld (hl),a	;pattern=transparent colour
+	inc hl
+	ld (hl),0	;next command =STOP
+	ld (blit_ptr),hl	;save blit_ptr for next operation
+
+	ld hl,(mark_ptr)
+	ld (hl),copy_	;inform damage list of type
+	inc hl
+	ld (mark_ptr),hl
+
+	pop de	;retrieve it !
+	ret
+
+
+;---------------------------------------------------------------------
+;This routine picks the correct frame from a sprite chunk, and puts
+;it to the screen. Currently ONLY byte format sprites are alllowed.
+;
+;IN: ahl=20 bit address of sprite chunk. B,C=Y,X coords IF not
+;    embedded in the data. e=frame number for printing.
+;
+
+f_sprite	push de	;save 'cos copy does
+	ld (b_chunk),hl	;save chunk address (16 bits)
+	ld (b_page),a	;4 bits
+
+	ld d,h	;as copy !
+	sla d
+	rla
+	sla d
+	rla		;now 64> a >=0
+	out (BANK3),a	;page the bank in
+	ld a,h
+	or 11000000b	;49152<= hl <=65535
+	ld h,a
+
+	ld a,(hl)	;get byte
+	and e_pos	;position int the block ?
+	ld a,(hl)	;for later testing
+	inc hl	;move on
+	jr z,nosps
+
+	ld c,(hl)
+	inc hl
+	ld b,(hl)	;get X,Y pos
+	inc hl
+
+nosps	push bc	;save the position 'til later
+	inc hl
+	inc hl	;ignore size. SIZE obtained from frame info !
+
+	and pos_mask	;test for type ONLY (mask out the position flag)
+	cp b_img_b	;byte type ONLY
+	jp nz,clean_1
+
+;-------------------
+
+	inc hl
+	ld a,(hl)	;transparent colour
+	push af	;save it
+
+	inc hl	;hl points to num frames, e NOT corrupted
+	ld a,e
+	cp (hl)	;compare frame for display
+	jp c,in_range	;8 frames means 0-7. if e>=a then don't display
+	pop af	;trans col
+	jp clean_1
+
+;-------------------
+
+in_range	inc hl	;hl=start of pointer/sizes table
+	sla e
+	sla e		;*4 (max frame number =31)
+	ld d,0
+	add hl,de	;hl points to sizes
+	ld c,(hl)
+	inc hl
+	ld b,(hl)	;get width, height
+	inc hl
+	ld e,(hl)
+	inc hl
+	ld d,(hl)	;pointer offset to data
+	inc hl
+	add hl,de	;hl points to data
+
+;-------------------
+
+	ld a,TOP_PAGE	;page top bank back in ! ASSUMED VALUE
+	out (BANK3),a
+
+	pop af
+	ld (b_trans),a	;save until required in blitter
+
+	ld a,(b_chunk+1)	;Get original 'H'
+	xor h
+	and 11000000b
+	xor h
+	ld h,a	;original page back in, before returning
+
+	jp into_copy	;use info in COPY now
+
+
+;---------------------------------------------------------------------
+;Fill a block/region. Again this command just inserts a blitter
+;template for later running
+;
+;IN  b=Y start, c=X start, d= Y size, e=X size, a=value
+;
+
+f_fill 	push hl
+	ld l,a
+	ex af,af'		;save 'til later
+	ld a,(cmd2m)
+	and mode_and		;filling lo or hi resolution
+	jr z,lo_fc
+	ld a,l		;hi res
+	and 15
+	ld l,a
+	rrca
+	rrca
+	rrca
+	rrca
+	or l
+	ex af,af'		;save value 'til later
+
+lo_fc	ld hl,(blit_ptr)
+	ld a,(cmd2m)		;get the mode
+	and mode_and
+	ld (hl),051h		;lores =mode 2 block filling, dst update
+	jr z,lo_fil
+	ld (hl),011h		;hires =mode 1 block filling, dst update
+
+lo_fil	inc hl		;to start of this one !
+	inc hl
+	inc hl
+	inc hl		;inc to DST0
+
+	ld (hl),c		;c=X start coord
+	inc hl
+	ld (hl),b		;b=Y start coord
+	inc hl
+
+
+	IF SWAPPING
+	ld a,(visible)
+	xor scrbase2
+	ld (hl),a
+	ELSE
+	ld (hl),scrbase
+	ENDIF
+
+
+	inc hl
+	xor a
+	ld (hl),a		;mode=0
+	inc hl
+	ld (hl),0c0h		;log_cmp. dest <- source
+	inc hl
+	ld (hl),d		;outer=y size
+	inc hl
+	ld (hl),e		;inner=x size
+	inc hl
+	sub e
+	ld (hl),a		;step = 256-xsize (a=0 from earlier)
+
+	inc hl
+	ex af,af'		;retrieve value, saved earlier
+	ld (hl),a
+	inc hl
+	ld (hl),0		;next command to STOP
+	ld (blit_ptr),hl		;pointing to next one !
+
+	ld hl,(mark_ptr)		;inform mark buffer of type
+	ld (hl),fill_
+	inc hl
+	ld (mark_ptr),hl		;move to next
+
+	pop hl			;retrieve saved hl
+	ret
+
+
+;---------------------------------------------------------------------
+;Clear the screen (and/or backscreen) to a specified colour.
+;
+;IN  b=which, c=colour
+;
+
+f_cls	ld a,(cmd2m)		;get the screen mode !
+	and mode_and		;test which mode
+
+	ld a,c
+	ld (scrn_col),a		;set background colour
+	jr z,its_lo		;now use the mode test
+
+	and 15		;copy bottom nibble to the top
+	ld c,a
+	rlca
+	rlca
+	rlca
+	rlca
+	or c
+
+its_lo	ld (cls_blit+PATTERN),a ;set pattern colour
+	ld a,(visible)
+	and a
+	jr z,vis_s1		;which screen is visible ?
+	rr b			;two is vis. Which for clearing ?
+	jr nc,back1
+	ld a,scrbase2
+	ld (cls_blit+DSTAD2),a	;clear screen in page 3 (visible)
+	ld hl,cls_blit
+	blit_run cpmpage,041h  	;do the clearing
+back1	rr b
+	ret nc		;return if not to do
+	ld a,scrbase
+	ld (cls_blit+DSTAD2),a	;clear screen in page 2 (back screen)
+	ld hl,cls_blit
+	blit_run cpmpage,041h	;do it
+	ret
+
+vis_s1	rr b			;two is vis. Which for clearing ?
+	jr nc,back2
+	ld a,scrbase
+	ld (cls_blit+DSTAD2),a	;clear screen in page 2 (visible)
+	ld hl,cls_blit
+	blit_run cpmpage,041h  	;do the clearing
+back2	rr b
+	ret nc		;return if not to do
+	ld a,scrbase2
+	ld (cls_blit+DSTAD2),a	;clear screen in page 3 (back screen)
+	ld hl,cls_blit
+	blit_run cpmpage,041h	;do it
+	ret 
+
+
